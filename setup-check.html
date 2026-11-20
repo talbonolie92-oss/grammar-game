@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Setup check - Grammar Game</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-role="check">
+  <main class="wrap">
+    <h1>Setup check</h1>
+    <p class="muted">This page tests that your Firebase project is connected correctly. Every line should show “Passed”.</p>
+
+    <section class="card">
+      <ul class="checklist">
+        <li class="check" id="chkConfig">
+          <span class="badge">Checking</span>
+          <div><div class="title">1. Firebase settings pasted</div><div class="msg"></div></div>
+        </li>
+        <li class="check" id="chkConnect">
+          <span class="badge">Checking</span>
+          <div><div class="title">2. Connected to the Realtime Database</div><div class="msg"></div></div>
+        </li>
+        <li class="check" id="chkAnon">
+          <span class="badge">Checking</span>
+          <div><div class="title">3. Student sign-in (anonymous) works</div><div class="msg"></div></div>
+        </li>
+        <li class="check" id="chkRules">
+          <span class="badge">Checking</span>
+          <div><div class="title">4. Security rules are published</div><div class="msg"></div></div>
+        </li>
+      </ul>
+    </section>
+
+    <section class="card narrow" id="teacherBox">
+      <h2>5. Teacher login test</h2>
+      <p class="muted">Use the teacher email and password you created in Firebase.</p>
+      <form id="teacherForm">
+        <label>Email
+          <input id="email" type="email" required autocomplete="username">
+        </label>
+        <label>Password
+          <input id="password" type="password" required autocomplete="current-password">
+        </label>
+        <button class="btn block" type="submit" id="teacherBtn">Test teacher login</button>
+      </form>
+      <ul class="checklist" style="margin-top: 14px">
+        <li class="check hidden" id="chkTeacher">
+          <span class="badge">Checking</span>
+          <div>
+            <div class="title">Teacher account</div>
+            <div class="msg"></div>
+            <div class="uid-box hidden" id="uidBox"></div>
+          </div>
+        </li>
+      </ul>
+    </section>
+
+    <p class="muted"><a href="index.html">Back to home</a></p>
+  </main>
+
+  <script type="module" src="js/setup-check.js"></script>
+</body>
+</html>
