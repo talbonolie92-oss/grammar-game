@@ -7,6 +7,37 @@
       "$uid": {
         ".read": "auth != null && auth.uid === $uid"
       }
+    },
+
+    "teachers": {
+      "$uid": {
+        "settings": {
+          ".read": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider === 'password' && root.child('allowedTeachers').child(auth.uid).val() === true",
+          ".write": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider === 'password' && root.child('allowedTeachers').child(auth.uid).val() === true",
+
+          "displayName": {
+            ".validate": "newData.isString() && newData.val().length <= 60"
+          },
+          "defaultTimer": {
+            ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 120"
+          },
+          "defaultMode": {
+            ".validate": "newData.val() === 'classic' || newData.val() === 'speed'"
+          },
+          "showResultsEachQuestion": {
+            ".validate": "newData.isBoolean()"
+          },
+          "sections": {
+            "$sectionId": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 30"
+            }
+          },
+
+          "$other": {
+            ".validate": false
+          }
+        }
+      }
     }
   }
 }
