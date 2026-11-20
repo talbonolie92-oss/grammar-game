@@ -1,0 +1,126 @@
+/* ------------------------------------------------------------
+   css/style.css  -  professional navy theme
+   Navy base, muted indigo accent, soft violet, amber for highlights.
+   ------------------------------------------------------------ */
+:root {
+  --navy: #0e1424;
+  --surface: #161d33;
+  --surface-2: #1e2744;
+  --line: #2b365c;
+  --text: #e9edf7;
+  --muted: #9aa6c4;
+  --indigo: #5b7cfa;
+  --indigo-dark: #4562d8;
+  --violet: #8b7cf6;
+  --amber: #f5b942;
+  --ok: #4ade80;
+  --bad: #f87171;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+
+body {
+  background: var(--navy);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.center { text-align: center; }
+
+h1, h2, h3 { line-height: 1.2; margin: 0 0 12px; font-weight: 700; }
+h1 { font-size: clamp(1.9rem, 5vw, 2.8rem); }
+h2 { font-size: 1.35rem; }
+p { margin: 0 0 12px; }
+a { color: var(--indigo); }
+
+/* ---------- Layout ---------- */
+.wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 60px; }
+.narrow { max-width: 460px; margin-left: auto; margin-right: auto; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 22px;
+  margin-bottom: 18px;
+}
+
+/* ---------- Home page ---------- */
+.hero { padding: 56px 0 28px; text-align: center; }
+.hero .byline { color: var(--amber); font-weight: 600; font-size: 1.1rem; margin-bottom: 6px; }
+.hero .tagline { color: var(--muted); font-size: 1.15rem; margin-top: 10px; }
+.hero h1 { margin-bottom: 8px; }
+
+.choose { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
+.choose .card { margin: 0; }
+.choose h2 { margin-bottom: 6px; }
+
+.phase-note {
+  display: inline-block; margin-top: 8px; padding: 4px 12px;
+  border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 0.9rem;
+}
+
+/* ---------- Forms ---------- */
+label { display: block; margin-bottom: 14px; color: var(--muted); font-size: 0.95rem; }
+input, select, textarea {
+  display: block; width: 100%; margin-top: 6px; padding: 12px 14px;
+  font: inherit; color: var(--text);
+  background: var(--navy); border: 1px solid var(--line); border-radius: 10px;
+}
+input:focus, select:focus, textarea:focus, .btn:focus-visible {
+  outline: 3px solid rgba(91, 124, 250, 0.55); outline-offset: 1px; border-color: var(--indigo);
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-block; cursor: pointer; text-decoration: none; text-align: center;
+  padding: 12px 22px; font: inherit; font-weight: 600;
+  color: #fff; background: var(--indigo);
+  border: 1px solid transparent; border-radius: 10px;
+  transition: background 0.15s, transform 0.1s;
+}
+.btn:hover { background: var(--indigo-dark); }
+.btn:active { transform: translateY(1px); }
+.btn.ghost { background: transparent; color: var(--text); border-color: var(--line); }
+.btn.ghost:hover { background: var(--surface-2); }
+.btn.block { display: block; width: 100%; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+
+/* ---------- Setup check page ---------- */
+.checklist { list-style: none; padding: 0; margin: 0; }
+.check {
+  display: flex; gap: 14px; align-items: flex-start;
+  padding: 14px 0; border-top: 1px solid var(--line);
+}
+.check:first-child { border-top: 0; }
+.badge {
+  flex: none; min-width: 92px; text-align: center;
+  padding: 4px 10px; border-radius: 999px; font-size: 0.85rem; font-weight: 700;
+  border: 1px solid var(--line); color: var(--muted);
+}
+.check.ok .badge { color: var(--ok); border-color: var(--ok); }
+.check.fail .badge { color: var(--bad); border-color: var(--bad); }
+.check.warn .badge { color: var(--amber); border-color: var(--amber); }
+.check .title { font-weight: 600; }
+.check .msg { color: var(--muted); font-size: 0.95rem; overflow-wrap: anywhere; }
+.uid-box {
+  margin-top: 8px; padding: 10px 12px; background: var(--navy);
+  border: 1px dashed var(--amber); border-radius: 8px; color: var(--amber);
+  font-family: Consolas, monospace; font-size: 0.95rem; overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  body { font-size: 16px; }
+  .choose { grid-template-columns: 1fr; }
+  .check { flex-direction: column; gap: 6px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
