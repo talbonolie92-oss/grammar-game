@@ -1,19 +1,21 @@
 /* ------------------------------------------------------------
-   css/style.css  -  professional navy theme (Phase 2)
-   Navy base, muted indigo accent, soft violet, amber for highlights.
-   This file replaces the Phase 1 version and keeps all its styles.
+   css/style.css  -  Grammar Game by Teacher Nolie
+   Palette: dark navy, white text, one subtle blue accent.
+   Yellow and red are used only for warnings and errors.
    ------------------------------------------------------------ */
 :root {
   --navy: #0e1424;
-  --surface: #161d33;
-  --surface-2: #1e2744;
-  --line: #2b365c;
-  --text: #e9edf7;
+  --surface: #151c31;
+  --surface-2: #1d2642;
+  --line: #2a3558;
+  --line-strong: #3a4772;
+  --text: #f2f5fb;
+  --soft: #b7c4e6;
   --muted: #9aa6c4;
-  --indigo: #5b7cfa;
-  --indigo-dark: #4562d8;
-  --violet: #8b7cf6;
-  --amber: #f5b942;
+  --blue: #5b8def;
+  --blue-dark: #4678de;
+  --blue-text: #8db0f7;
+  --warn: #f5b942;
   --ok: #4ade80;
   --bad: #f87171;
 }
@@ -30,6 +32,7 @@ body {
   min-height: 100vh;
 }
 
+[hidden] { display: none !important; }
 .hidden { display: none !important; }
 .center { text-align: center; }
 .muted { color: var(--muted); }
@@ -40,7 +43,7 @@ h1, h2, h3 { line-height: 1.2; margin: 0 0 12px; font-weight: 700; }
 h1 { font-size: clamp(1.8rem, 5vw, 2.6rem); }
 h2 { font-size: 1.3rem; }
 p { margin: 0 0 12px; }
-a { color: var(--indigo); }
+a { color: var(--blue-text); }
 
 /* ---------- Basic layout ---------- */
 .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 60px; }
@@ -59,11 +62,32 @@ a { color: var(--indigo); }
 }
 .center-screen > .muted { text-align: center; }
 
+/* ---------- School logo slot ----------
+   Shows assets/school-logo.png when it exists (see js/branding.js).
+   Until then, a neutral "Logo" placeholder is shown. */
+.school-logo {
+  display: inline-flex; flex: none; width: 44px; height: 44px;
+  align-items: center; justify-content: center;
+}
+.school-logo.sm { width: 36px; height: 36px; }
+.school-logo.lg { width: 80px; height: 80px; }
+.school-logo img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.logo-placeholder {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; height: 100%;
+  border: 1.5px dashed var(--line-strong); border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--muted); font-size: 0.7rem;
+}
+.school-logo.lg .logo-placeholder { font-size: 0.85rem; border-radius: 14px; }
+
 /* ---------- Home page ---------- */
-.hero { padding: 56px 0 28px; text-align: center; }
-.hero .byline { color: var(--amber); font-weight: 600; font-size: 1.1rem; margin-bottom: 6px; }
-.hero .tagline { color: var(--muted); font-size: 1.15rem; margin-top: 10px; }
-.hero h1 { margin-bottom: 8px; }
+.hero { padding: 44px 0 26px; text-align: center; }
+.hero .school-logo { margin: 0 auto 18px; }
+.hero h1 { margin-bottom: 4px; letter-spacing: -0.01em; }
+.byline { color: var(--soft); font-weight: 500; margin-bottom: 14px; }
+.tagline { color: var(--blue-text); font-size: 1.1rem; font-weight: 600; margin-bottom: 0; }
+.audience { margin: 14px 0 0; }
 
 .choose { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px; }
 .choose .card { margin: 0; }
@@ -76,8 +100,9 @@ a { color: var(--indigo); }
 
 /* ---------- Login ---------- */
 .login-brand { text-align: center; margin-bottom: 22px; padding-bottom: 18px; border-bottom: 1px solid var(--line); }
-.login-brand h1 { font-size: 1.5rem; margin-bottom: 6px; }
-.byline { color: var(--amber); font-weight: 600; margin-bottom: 4px; }
+.login-brand .school-logo { margin: 0 auto 14px; }
+.login-brand h1 { font-size: 1.7rem; margin-bottom: 2px; }
+.login-brand .byline { margin-bottom: 8px; }
 
 /* ---------- Forms ---------- */
 label { display: block; margin-bottom: 14px; color: var(--muted); font-size: 0.95rem; }
@@ -87,11 +112,11 @@ input, select, textarea {
   background: var(--navy); border: 1px solid var(--line); border-radius: 10px;
 }
 input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visible {
-  outline: 3px solid rgba(91, 124, 250, 0.55); outline-offset: 1px; border-color: var(--indigo);
+  outline: 3px solid rgba(91, 141, 239, 0.55); outline-offset: 1px; border-color: var(--blue);
 }
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .checkbox { display: flex; align-items: center; gap: 10px; color: var(--text); cursor: pointer; }
-.checkbox input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--indigo); }
+.checkbox input { width: 22px; height: 22px; margin: 0; flex: none; accent-color: var(--blue); }
 .actions { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 6px; }
 .status { font-size: 0.95rem; }
 .status.good { color: var(--ok); }
@@ -105,11 +130,11 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visi
 .btn {
   display: inline-block; cursor: pointer; text-decoration: none; text-align: center;
   padding: 12px 22px; font: inherit; font-weight: 600;
-  color: #fff; background: var(--indigo);
+  color: #fff; background: var(--blue);
   border: 1px solid transparent; border-radius: 10px;
   transition: background 0.15s, transform 0.1s;
 }
-.btn:hover { background: var(--indigo-dark); }
+.btn:hover { background: var(--blue-dark); }
 .btn:active { transform: translateY(1px); }
 .btn.ghost { background: transparent; color: var(--text); border-color: var(--line); }
 .btn.ghost:hover { background: var(--surface-2); }
@@ -127,10 +152,13 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visi
   background: var(--surface); border-right: 1px solid var(--line);
   padding: 22px 14px; position: sticky; top: 0; height: 100vh; overflow-y: auto;
 }
-.brand { padding: 0 8px 18px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
-.brand-name { font-weight: 700; font-size: 1.2rem; }
-.brand-sub { color: var(--muted); font-size: 0.9rem; }
-.brand-by { color: var(--amber); font-size: 0.85rem; margin-top: 4px; font-weight: 600; }
+.brand {
+  display: flex; align-items: center; gap: 12px;
+  padding: 0 8px 18px; margin-bottom: 14px; border-bottom: 1px solid var(--line);
+}
+.brand-text { min-width: 0; }
+.brand-name { font-weight: 700; font-size: 1.1rem; line-height: 1.2; }
+.brand-by { color: var(--soft); font-size: 0.85rem; }
 
 .nav { flex: 1; }
 .nav a {
@@ -140,7 +168,7 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visi
 }
 .nav a:hover { background: var(--surface-2); color: var(--text); }
 .nav a[aria-current="page"] {
-  background: rgba(91, 124, 250, 0.18); color: #fff; box-shadow: inset 3px 0 0 var(--indigo);
+  background: rgba(91, 141, 239, 0.16); color: #fff; box-shadow: inset 3px 0 0 var(--blue);
 }
 
 .userbox { border-top: 1px solid var(--line); padding: 14px 8px 0; }
@@ -161,7 +189,7 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visi
 /* ---------- Dashboard ---------- */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; margin-bottom: 18px; }
 .stat { margin: 0; padding: 18px 20px; }
-.stat .num { font-size: 2.1rem; font-weight: 700; color: var(--amber); line-height: 1.1; }
+.stat .num { font-size: 2.1rem; font-weight: 700; color: var(--text); line-height: 1.1; }
 .stat .label { color: var(--muted); margin-top: 4px; }
 
 /* ---------- Lists (class sections) ---------- */
@@ -182,12 +210,12 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visi
 }
 .check.ok .badge { color: var(--ok); border-color: var(--ok); }
 .check.fail .badge { color: var(--bad); border-color: var(--bad); }
-.check.warn .badge { color: var(--amber); border-color: var(--amber); }
+.check.warn .badge { color: var(--warn); border-color: var(--warn); }
 .check .title { font-weight: 600; }
 .check .msg { color: var(--muted); font-size: 0.95rem; overflow-wrap: anywhere; }
 .uid-box {
   margin-top: 8px; padding: 10px 12px; background: var(--navy);
-  border: 1px dashed var(--amber); border-radius: 8px; color: var(--amber);
+  border: 1px dashed var(--warn); border-radius: 8px; color: var(--warn);
   font-family: Consolas, monospace; font-size: 0.95rem; overflow-wrap: anywhere;
 }
 
@@ -196,11 +224,11 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible, .nav a:focus-visi
   .app { display: block; }
 
   .mobilebar {
-    display: flex; align-items: center; gap: 14px; padding: 10px 14px;
+    display: flex; align-items: center; gap: 12px; padding: 10px 14px;
     background: var(--surface); border-bottom: 1px solid var(--line);
     position: sticky; top: 0; z-index: 10;
   }
-  .mobilebar .brand-name { font-size: 1.05rem; }
+  .mobilebar .brand-name { font-size: 1rem; }
 
   .sidebar {
     position: fixed; left: 0; top: 0; bottom: 0; height: auto; z-index: 30;
