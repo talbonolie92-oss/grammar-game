@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Teacher - Grammar Game</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-role="teacher">
+
+  <!-- Loading -->
+  <div id="loadingScreen" class="screen center-screen">
+    <p class="muted">Loading…</p>
+  </div>
+
+  <!-- Firebase settings missing -->
+  <div id="configScreen" class="screen hidden center-screen">
+    <div class="card narrow">
+      <h2>Firebase is not set up yet</h2>
+      <p>Open <b>js/firebase-config.js</b> and paste your Firebase settings, then reload this page.</p>
+    </div>
+  </div>
+
+  <!-- Login -->
+  <div id="loginScreen" class="screen hidden center-screen">
+    <div class="card narrow">
+      <div class="login-brand">
+        <h1>Grammar Game for Grade 10, 11 &amp; 12</h1>
+        <p class="byline">By Teacher Nolie</p>
+        <p class="muted">Learn. Practice. Compete.</p>
+      </div>
+      <h2>Teacher login</h2>
+      <form id="loginForm">
+        <label>Email
+          <input id="email" type="email" required autocomplete="username">
+        </label>
+        <label>Password
+          <input id="password" type="password" required autocomplete="current-password">
+        </label>
+        <button id="loginBtn" class="btn block" type="submit">Log in</button>
+        <p id="loginError" class="error"></p>
+      </form>
+      <p class="muted center"><a href="index.html">Back to home</a></p>
+    </div>
+  </div>
+
+  <!-- Logged in, but not on the allowed teachers list -->
+  <div id="deniedScreen" class="screen hidden center-screen">
+    <div class="card narrow">
+      <h2>This account is not allowed to use the teacher area</h2>
+      <p>In the Firebase console, open <b>Realtime Database &gt; Data</b>. Under <b>allowedTeachers</b>, add a child named with your user ID and the value <b>true</b>.</p>
+      <p>Your user ID:</p>
+      <div id="myUid" class="uid-box"></div>
+      <p class="muted" style="margin-top: 12px">If it is already added, check that the newest database rules are published in Firebase.</p>
+      <button id="deniedLogout" class="btn ghost block" type="button">Log out</button>
+    </div>
+  </div>
+
+  <!-- The teacher app -->
+  <div id="appScreen" class="screen hidden">
+    <div class="app">
+
+      <header class="mobilebar">
+        <button id="menuBtn" class="btn ghost small" type="button" aria-label="Open menu">Menu</button>
+        <span class="brand-name">Grammar Game</span>
+      </header>
+      <div id="scrim" class="scrim"></div>
+
+      <aside id="sidebar" class="sidebar">
+        <div class="brand">
+          <div class="brand-name">Grammar Game</div>
+          <div class="brand-sub">Grades 10, 11 &amp; 12</div>
+          <div class="brand-by">By Teacher Nolie</div>
+        </div>
+
+        <nav class="nav" aria-label="Main">
+          <a href="#dashboard" data-section="dashboard">Dashboard</a>
+          <a href="#questions" data-section="questions">Question Bank</a>
+          <a href="#create" data-section="create">Create Game</a>
+          <a href="#history" data-section="history">Game History</a>
+          <a href="#reports" data-section="reports">Performance Reports</a>
+          <a href="#settings" data-section="settings">Settings</a>
+        </nav>
+
+        <div class="userbox">
+          <div class="muted small-text">Signed in as</div>
+          <div id="userName" class="user-name"></div>
+          <button id="logoutBtn" class="btn ghost small block" type="button">Log out</button>
+        </div>
+      </aside>
+
+      <main class="content">
+        <div id="appError" class="notice hidden"></div>
+
+        <!-- Dashboard -->
+        <section id="sec-dashboard" class="section">
+          <header class="page-head">
+            <h1 id="welcome">Welcome back</h1>
+            <p class="muted">A quick look at your Grammar Game.</p>
+          </header>
+
+          <div class="stats">
+            <div class="card stat"><div class="num" id="statQuestions">0</div><div class="label">Total questions</div></div>
+            <div class="card stat"><div class="num" id="statGames">0</div><div class="label">Games hosted</div></div>
+            <div class="card stat"><div class="num" id="statStudents">0</div><div class="label">Student participants</div></div>
+            <div class="card stat"><div class="num" id="statSections">0</div><div class="label">Class sections</div></div>
+          </div>
+
+          <div class="card">
+            <h2>Recent game sessions</h2>
+            <p class="muted">No games yet. Games you host will appear here.</p>
+          </div>
+          <div class="card">
+            <h2>Class performance overview</h2>
+            <p class="muted">Results will appear here after your first game.</p>
+          </div>
+        </section>
+
+        <!-- Question Bank -->
+        <section id="sec-questions" class="section hidden">
+          <header class="page-head">
+            <h1>Question Bank</h1>
+            <p class="muted">Manage questions for Grade 10, 11 and 12, organized by grammar topic.</p>
+          </header>
+          <div class="card">
+            <h2>Coming in Phase 3</h2>
+            <p class="muted">Here you will add, edit and delete questions, choose the correct answer, add explanations, and organize questions by grade, topic and question set.</p>
+          </div>
+        </section>
+
+        <!-- Create Game -->
+        <section id="sec-create" class="section hidden">
+          <header class="page-head">
+            <h1>Create Game</h1>
+            <p class="muted">Choose a grade, topic, number of questions, time limit and game mode.</p>
+          </header>
+          <div class="card">
+            <h2>Coming in Phase 4</h2>
+            <p class="muted">Here you will create a game and get a Game PIN, a QR code and a shareable link for your students.</p>
+          </div>
+        </section>
+
+        <!-- Game History -->
+        <section id="sec-history" class="section hidden">
+          <header class="page-head">
+            <h1>Game History</h1>
+            <p class="muted">Every completed game is saved here permanently.</p>
+          </header>
+          <div class="card">
+            <h2>Coming in Phase 6</h2>
+            <p class="muted">Here you will open previous games, review results and compare your classes across sessions.</p>
+          </div>
+        </section>
+
+        <!-- Performance Reports -->
+        <section id="sec-reports" class="section hidden">
+          <header class="page-head">
+            <h1>Performance Reports</h1>
+            <p class="muted">Find out which grammar topics need more review.</p>
+          </header>
+          <div class="card">
+            <h2>Coming in Phase 6</h2>
+            <p class="muted">Here you will see basic and detailed reports, with filters for grade, class section, topic, date and student.</p>
+          </div>
+        </section>
+
+        <!-- Settings -->
+        <section id="sec-settings" class="section hidden">
+          <header class="page-head">
+            <h1>Settings</h1>
+            <p class="muted">Your preferences and class sections.</p>
+          </header>
+
+          <div class="card">
+            <h2>Game defaults</h2>
+            <form id="settingsForm">
+              <label>Display name
+                <input id="displayName" type="text" maxlength="60" placeholder="For example: Teacher Nolie">
+              </label>
+              <div class="form-row">
+                <label>Default time per question (seconds)
+                  <input id="defaultTimer" type="number" min="5" max="120" value="20">
+                </label>
+                <label>Default game mode
+                  <select id="defaultMode">
+                    <option value="classic">Classic Quiz</option>
+                    <option value="speed">Speed Battle</option>
+                  </select>
+                </label>
+              </div>
+              <label class="checkbox">
+                <input id="showResults" type="checkbox" checked>
+                <span>Show students their result after each question</span>
+              </label>
+              <div class="actions">
+                <button class="btn" type="submit" id="saveSettingsBtn">Save settings</button>
+                <span id="saveStatus" class="status" role="status"></span>
+              </div>
+            </form>
+          </div>
+
+          <div class="card">
+            <h2>Class sections</h2>
+            <p class="muted">Students will pick their section from this list when they join a game. Changes here are saved right away.</p>
+
+            <form id="addSectionForm" class="inline-form">
+              <input id="newSection" type="text" maxlength="30" placeholder="For example: 10-Newton" aria-label="New section name">
+              <button class="btn" type="submit">Add section</button>
+            </form>
+            <p id="sectionMsg" class="error"></p>
+
+            <div id="sectionList"></div>
+            <p class="muted small-text">Renaming or removing a section does not change the results of games already played.</p>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <script type="module" src="js/teacher.js"></script>
+</body>
+</html>
