@@ -14,13 +14,13 @@ import { getAuth } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-aut
 import { getDatabase } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const firebaseConfig = {
-  apiKey: "PASTE_YOUR_API_KEY",
-  authDomain: "PASTE_YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "PASTE_YOUR_DATABASE_URL",
-  projectId: "PASTE_YOUR_PROJECT_ID",
-  storageBucket: "PASTE_YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "PASTE_YOUR_SENDER_ID",
-  appId: "PASTE_YOUR_APP_ID"
+  apiKey: "AIzaSyCfHJ0EEsucv8bNMgW2UHeKiFXdZyoL080",
+  authDomain: "grammar-game-d7b09.firebaseapp.com",
+  databaseURL: "https://grammar-game-d7b09-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "grammar-game-d7b09",
+  storageBucket: "grammar-game-d7b09.firebasestorage.app",
+  messagingSenderId: "518946365409",
+  appId: "1:518946365409:web:ef9a1d6a5a7c7bbd5d7ca0"
 };
 
 // True until you paste your own settings above.
