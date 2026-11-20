@@ -1,40 +1,34 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Grammar Game by Teacher Nolie</title>
-  <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
-  <main class="wrap">
-    <header class="hero">
-      <span class="school-logo lg"><span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span><img src="assets/school-logo.png" alt="School logo" hidden></span>
-      <h1>Grammar Game</h1>
-      <p class="byline">by Teacher Nolie</p>
-      <p class="tagline">Learn. Practice. Complete.</p>
-      <p class="audience muted">English grammar practice for Grades 10, 11 and 12.</p>
-    </header>
 
-    <section class="choose">
-      <div class="card">
-        <h2>Student</h2>
-        <p class="muted">Join a live game with a PIN, a link, or a QR code.</p>
-        <button class="btn block" type="button" disabled>Join a game</button>
-        <span class="phase-note">Available in Phase 4</span>
-      </div>
-      <div class="card">
-        <h2>Teacher</h2>
-        <p class="muted">Manage questions, host games, and review reports.</p>
-        <a class="btn block" href="teacher.html">Teacher login</a>
-      </div>
-    </section>
+// ------------------------------------------------------------
+// Grammar Game - School Logo
+// ------------------------------------------------------------
+(function () {
+  document.querySelectorAll(".school-logo").forEach(function (slot) {
+    var img = slot.querySelector("img");
+    var placeholder = slot.querySelector(".logo-placeholder");
 
-    <p class="center muted" style="margin-top: 28px">
-      Setting up? <a href="setup-check.html">Run the setup check</a>
-    </p>
-  </main>
+    if (!img || !placeholder) return;
 
-  <script src="js/branding.js" defer></script>
-</body>
-</html>
+    function showLogo() {
+      img.hidden = false;
+      placeholder.hidden = true;
+    }
+
+    function showPlaceholder() {
+      img.hidden = true;
+      placeholder.hidden = false;
+    }
+
+    img.addEventListener("load", showLogo);
+    img.addEventListener("error", showPlaceholder);
+
+    // Check the image immediately.
+    if (img.complete) {
+      if (img.naturalWidth > 0) {
+        showLogo();
+      } else {
+        showPlaceholder();
+      }
+    }
+  });
+})();
