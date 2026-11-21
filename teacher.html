@@ -125,14 +125,104 @@
 
         <!-- Question Bank -->
         <section id="sec-questions" class="section hidden">
-          <header class="page-head">
-            <h1>Question Bank</h1>
-            <p class="muted">Manage questions for Grade 10, 11 and 12, organized by grammar topic.</p>
+          <header class="page-head page-head-row">
+            <div>
+              <h1>Question Bank</h1>
+              <p class="muted">Manage questions for Grade 10, 11 and 12, organized by grammar topic.</p>
+            </div>
+            <button id="qbAddBtn" class="btn" type="button">Add question</button>
           </header>
-          <div class="card">
-            <h2>Coming in Phase 3</h2>
-            <p class="muted">Here you will add, edit and delete questions, choose the correct answer, add explanations, and organize questions by grade, topic and question set.</p>
+
+          <div id="qbLoadError" class="notice hidden"></div>
+          <div id="qbNotice" class="notice good hidden" role="status"></div>
+
+          <!-- Add / edit form (hidden until you click Add question or Edit) -->
+          <div id="qbFormCard" class="card hidden">
+            <h2 id="qbFormTitle">Add a question</h2>
+            <form id="qbForm" novalidate>
+              <div class="form-row">
+                <label>Grade
+                  <select id="qbGrade">
+                    <option value="">Select grade</option>
+                    <option value="10">Grade 10</option>
+                    <option value="11">Grade 11</option>
+                    <option value="12">Grade 12</option>
+                  </select>
+                </label>
+                <label>Grammar topic
+                  <input id="qbTopic" type="text" maxlength="60" list="qbTopicList" placeholder="For example: Tenses" autocomplete="off">
+                  <datalist id="qbTopicList"></datalist>
+                </label>
+              </div>
+
+              <label>Question
+                <textarea id="qbText" maxlength="500" placeholder="Type the question. Use ___ for a blank."></textarea>
+              </label>
+
+              <fieldset>
+                <legend>Answer choices. Select the circle next to the correct answer.</legend>
+                <div class="opt">
+                  <input id="qbCorrect0" type="radio" name="qbCorrect" value="0" aria-label="Choice A is the correct answer">
+                  <span class="opt-letter">A</span>
+                  <input id="qbChoice0" type="text" maxlength="200" placeholder="Choice A" aria-label="Choice A" autocomplete="off">
+                </div>
+                <div class="opt">
+                  <input id="qbCorrect1" type="radio" name="qbCorrect" value="1" aria-label="Choice B is the correct answer">
+                  <span class="opt-letter">B</span>
+                  <input id="qbChoice1" type="text" maxlength="200" placeholder="Choice B" aria-label="Choice B" autocomplete="off">
+                </div>
+                <div class="opt">
+                  <input id="qbCorrect2" type="radio" name="qbCorrect" value="2" aria-label="Choice C is the correct answer">
+                  <span class="opt-letter">C</span>
+                  <input id="qbChoice2" type="text" maxlength="200" placeholder="Choice C" aria-label="Choice C" autocomplete="off">
+                </div>
+                <div class="opt">
+                  <input id="qbCorrect3" type="radio" name="qbCorrect" value="3" aria-label="Choice D is the correct answer">
+                  <span class="opt-letter">D</span>
+                  <input id="qbChoice3" type="text" maxlength="200" placeholder="Choice D" aria-label="Choice D" autocomplete="off">
+                </div>
+              </fieldset>
+
+              <label>Explanation (optional)
+                <textarea id="qbExplain" maxlength="500" placeholder="Shown to students after the answer is revealed."></textarea>
+              </label>
+
+              <div class="actions">
+                <button id="qbSave" class="btn" type="submit">Save question</button>
+                <button id="qbCancel" class="btn ghost" type="button">Cancel</button>
+                <span id="qbFormMsg" class="status" role="status"></span>
+              </div>
+            </form>
           </div>
+
+          <!-- Search and filters -->
+          <div class="card">
+            <div class="toolbar-grid">
+              <label>Search
+                <input id="qbSearch" type="search" placeholder="Search questions, choices or topics" autocomplete="off">
+              </label>
+              <label>Grade
+                <select id="qbGradeFilter">
+                  <option value="">All grades</option>
+                  <option value="10">Grade 10</option>
+                  <option value="11">Grade 11</option>
+                  <option value="12">Grade 12</option>
+                </select>
+              </label>
+              <label>Topic
+                <select id="qbTopicFilter">
+                  <option value="">All topics</option>
+                </select>
+              </label>
+            </div>
+            <div class="toolbar-foot">
+              <span id="qbCount" class="muted"></span>
+              <button id="qbClear" class="btn ghost small hidden" type="button">Clear filters</button>
+            </div>
+          </div>
+
+          <!-- Saved questions -->
+          <div id="qbList"></div>
         </section>
 
         <!-- Create Game -->
