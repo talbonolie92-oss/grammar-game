@@ -1,6 +1,6 @@
 
 /* ------------------------------------------------------------
-   js/game-host.js — Phase 7 FIXED
+   js/game-host.js — Phase 7 FINAL
    - Synchronized and Individual progression
    - Randomized question order per student
    - Automatic progression after answer or timeout
@@ -27,6 +27,8 @@ let currentGameId = null;
 let currentGameQuestions = [];
 let currentQuestionIndex = -1;
 let progressionMode = "synchronized";
+let gameMode = "classic";
+let gameTimerSeconds = 20;
 
 let stopPlayersListener = null;
 let stopScoresListener = null;
@@ -62,6 +64,7 @@ if (section) {
               <option value="12">Grade 12</option>
             </select>
           </label>
+
           <label>Grammar topic
             <select id="gameTopic" required disabled>
               <option value="">Select a grade first</option>
@@ -73,6 +76,7 @@ if (section) {
           <label>Number of questions
             <input id="gameQuestionCount" type="number" min="1" max="50" value="10" required>
           </label>
+
           <label>Time per question (seconds)
             <input id="gameTimer" type="number" min="5" max="120" value="20" required>
           </label>
@@ -164,11 +168,11 @@ if (section) {
     </div>
   `;
 
-  const message = (text, error = false) => {
+  function message(text, error = false) {
     const el = $("gameFormMessage");
     el.textContent = text;
     el.className = "status" + (error ? " bad" : " good");
-  };
+  }
 
   function controlMessage(text, error = false) {
     const el = $("gameControlMessage");
@@ -186,7 +190,10 @@ if (section) {
   function availableQuestions() {
     const grade = Number($("gameGrade").value);
     const topic = $("gameTopic").value;
-    return questions.filter(q => q.grade === grade && q.topic === topic);
+
+    return questions.filter(q =>
+      q.grade === grade && q.topic === topic
+    );
   }
 
   function updateQuestionInfo() {
@@ -202,6 +209,7 @@ if (section) {
   function updateTopics() {
     const grade = Number($("gameGrade").value);
     const select = $("gameTopic");
+
     select.replaceChildren();
 
     const first = document.createElement("option");
@@ -210,7 +218,10 @@ if (section) {
     select.appendChild(first);
 
     const topics = [...new Set(
-      questions.filter(q => q.grade === grade).map(q => q.topic).filter(Boolean)
+      questions
+        .filter(q => q.grade === grade)
+        .map(q => q.topic)
+        .filter(Boolean)
     )].sort((a, b) => a.localeCompare(b));
 
     topics.forEach(topic => {
@@ -221,16 +232,22 @@ if (section) {
     });
 
     select.disabled = !topics.length;
-    if (!topics.length && grade) first.textContent = "No topics available";
+
+    if (!topics.length && grade) {
+      first.textContent = "No topics available";
+    }
+
     updateQuestionInfo();
   }
 
   function shuffle(items) {
     const result = [...items];
+
     for (let i = result.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [result[i], result[j]] = [result[j], result[i]];
     }
+
     return result;
   }
 
@@ -243,10 +260,12 @@ if (section) {
   function renderPlayers(players) {
     const list = $("playerList");
     list.replaceChildren();
+
     const entries = Object.entries(players || {});
 
     $("playerCount").textContent =
-      entries.length + (entries.length === 1 ? " student joined" : " students joined");
+      entries.length +
+      (entries.length === 1 ? " student joined" : " students joined");
 
     if (!entries.length) {
       const empty = document.createElement("p");
@@ -278,7 +297,9 @@ if (section) {
 
     const entries = Object.entries(scores || {})
       .map(([uid, score]) => ({ uid, ...score }))
-      .sort((a, b) => (Number(a.rank) || 999) - (Number(b.rank) || 999));
+      .sort((a, b) =>
+        (Number(a.rank) || 999) - (Number(b.rank) || 999)
+      );
 
     if (!entries.length) {
       const empty = document.createElement("p");
@@ -293,7 +314,8 @@ if (section) {
       row.className = "list-row";
 
       const name = document.createElement("strong");
-      name.textContent = `#${student.rank || "-"} ${student.name || "Student"}`;
+      name.textContent =
+        `#${student.rank || "-"} ${student.name || "Student"}`;
 
       const details = document.createElement("span");
       details.className = "muted";
@@ -307,6 +329,7 @@ if (section) {
 
   function listenToPlayers(gameId) {
     if (stopPlayersListener) stopPlayersListener();
+
     stopPlayersListener = onValue(
       ref(db, "gamePlayers/" + gameId),
       snap => renderPlayers(snap.val() || {}),
@@ -319,6 +342,7 @@ if (section) {
 
   function listenToScores(gameId) {
     if (stopScoresListener) stopScoresListener();
+
     stopScoresListener = onValue(
       ref(db, "gameScores/" + gameId),
       snap => renderLeaderboard(snap.val() || {}),
@@ -331,15 +355,20 @@ if (section) {
 
   function listenToStudentStates(gameId) {
     if (stopStudentStatesListener) stopStudentStatesListener();
+
     stopStudentStatesListener = onValue(
       ref(db, "gameStudentState/" + gameId),
       snap => {
         if (progressionMode !== "individual") return;
+
         const states = Object.values(snap.val() || {});
-        const completed = states.filter(s => s && s.finished).length;
+        const completed = states.filter(s => s?.finished === true).length;
         const active = states.filter(s => s && !s.finished).length;
+
         if (states.length) {
-          controlMessage(`Individual progress: ${completed} finished • ${active} still playing.`);
+          controlMessage(
+            `Individual progress: ${completed} finished • ${active} still playing.`
+          );
         }
       },
       error => console.error("Student state listener:", error)
@@ -348,16 +377,20 @@ if (section) {
 
   function listenToAnswers(gameId) {
     if (stopAnswersListener) stopAnswersListener();
+
     stopAnswersListener = onValue(
       ref(db, "gameAnswers/" + gameId),
       snap => {
         if (progressionMode !== "individual") return;
+
         const allAnswers = snap.val() || {};
 
         for (const [uid, studentAnswers] of Object.entries(allAnswers)) {
           for (const [key, answer] of Object.entries(studentAnswers || {})) {
             if (!answer) continue;
+
             const answerId = uid + "_" + key;
+
             if (!processingAnswers.has(answerId)) {
               processIndividualAnswer(uid, key, answer, answerId);
             }
@@ -376,6 +409,7 @@ if (section) {
       ref(db, "gamePins/" + pin),
       current => {
         if (current !== null) return;
+
         return {
           gameId,
           ownerUid: teacherUid,
@@ -385,6 +419,7 @@ if (section) {
       },
       { applyLocally: false }
     );
+
     return result.committed;
   }
 
@@ -403,8 +438,10 @@ if (section) {
 
   function renderQuestionPreview(question, index) {
     $("teacherQuestionPreview").classList.remove("hidden");
+
     $("teacherQuestionNumber").textContent =
       `Question ${index + 1} of ${currentGameQuestions.length}`;
+
     $("teacherQuestionText").textContent = question.text;
 
     const choices = $("teacherQuestionChoices");
@@ -422,8 +459,12 @@ if (section) {
 
   function updateControlButtons(status, revealed) {
     [
-      "startGameBtn", "pauseGameBtn", "resumeGameBtn",
-      "revealAnswerBtn", "nextQuestionBtn", "endGameBtn"
+      "startGameBtn",
+      "pauseGameBtn",
+      "resumeGameBtn",
+      "revealAnswerBtn",
+      "nextQuestionBtn",
+      "endGameBtn"
     ].forEach(hideButton);
 
     if (status === "waiting") {
@@ -431,6 +472,7 @@ if (section) {
     } else if (status === "active") {
       showButton("pauseGameBtn");
       showButton("endGameBtn");
+
       if (revealed) {
         hideButton("pauseGameBtn");
         showButton("nextQuestionBtn");
@@ -440,8 +482,12 @@ if (section) {
     } else if (status === "paused") {
       showButton("resumeGameBtn");
       showButton("endGameBtn");
-      if (revealed) showButton("nextQuestionBtn");
-      else showButton("revealAnswerBtn");
+
+      if (revealed) {
+        showButton("nextQuestionBtn");
+      } else {
+        showButton("revealAnswerBtn");
+      }
     }
   }
 
@@ -457,35 +503,52 @@ if (section) {
     }
   }
 
-  function getStudentQuestion(uid, position, orders) {
-    const order = orders?.[uid];
-    if (!Array.isArray(order)) return null;
-    const questionIndex = order[position];
+  function getStudentQuestion(uid, position, order) {
+    const studentOrder = order?.[uid];
+
+    if (!Array.isArray(studentOrder)) return null;
+
+    const questionIndex = studentOrder[position];
+
     if (!Number.isInteger(questionIndex)) return null;
+
     return currentGameQuestions[questionIndex] || null;
   }
 
   async function publishIndividualQuestion(uid, position, order) {
-    const question = getStudentQuestion(uid, position, { [uid]: order });
-    const stateRef = ref(db, `gameStudentState/${currentGameId}/${uid}`);
+    const stateRef = ref(
+      db,
+      `gameStudentState/${currentGameId}/${uid}`
+    );
+
+    const question = getStudentQuestion(uid, position, {
+      [uid]: order
+    });
 
     if (!question) {
+      const now = Date.now();
+
       await set(stateRef, {
         currentQuestionIndex: Math.max(0, position),
         currentQuestion: {
           text: "You have completed the game.",
           choices: ["Completed", "Completed", "Completed", "Completed"]
         },
-        questionStartedAt: Date.now(),
-        answerDeadline: Date.now(),
+        questionStartedAt: now,
+        answerDeadline: now,
         answerRevealed: true,
+        revealedCorrectIndex: null,
+        revealedExplanation: "",
+        pausedRemaining: null,
         finished: true,
         status: "completed"
       });
+
       return;
     }
 
     const now = Date.now();
+
     await set(stateRef, {
       currentQuestionIndex: position,
       currentQuestion: {
@@ -493,7 +556,7 @@ if (section) {
         choices: question.choices
       },
       questionStartedAt: now,
-      answerDeadline: now + Number($("gameTimer").value) * 1000,
+      answerDeadline: now + gameTimerSeconds * 1000,
       answerRevealed: false,
       revealedCorrectIndex: null,
       revealedExplanation: "",
@@ -504,15 +567,23 @@ if (section) {
   }
 
   async function startIndividualGame() {
-    const playersSnap = await get(ref(db, "gamePlayers/" + currentGameId));
+    const playersSnap = await get(
+      ref(db, "gamePlayers/" + currentGameId)
+    );
+
     const players = playersSnap.val() || {};
     const entries = Object.entries(players);
 
-    if (!entries.length) throw new Error("No students have joined the lobby yet.");
+    if (!entries.length) {
+      throw new Error("No students have joined the lobby yet.");
+    }
 
     const orders = {};
+
     for (const [uid] of entries) {
-      orders[uid] = shuffle(currentGameQuestions.map((q, i) => i));
+      orders[uid] = shuffle(
+        currentGameQuestions.map((q, index) => index)
+      );
     }
 
     await update(ref(db, "gamePrivate/" + currentGameId), {
@@ -535,29 +606,41 @@ if (section) {
 
     renderQuestionPreview(currentGameQuestions[0], 0);
     updateControlButtons("active", false);
-    controlMessage("Individual mode started. Students have separate randomized question orders.");
+
+    controlMessage(
+      "Individual mode started. Students have separate randomized question orders."
+    );
   }
 
   async function showQuestion(index) {
     const question = currentGameQuestions[index];
-    if (!question) throw new Error("The requested question could not be found.");
+
+    if (!question) {
+      throw new Error("The requested question could not be found.");
+    }
 
     const now = Date.now();
+
     await update(ref(db, "games/" + currentGameId), {
       status: "active",
       currentQuestionIndex: index,
-      currentQuestion: { text: question.text, choices: question.choices },
+      currentQuestion: {
+        text: question.text,
+        choices: question.choices
+      },
       questionStartedAt: now,
-      answerDeadline: now + Number($("gameTimer").value) * 1000,
+      answerDeadline: now + gameTimerSeconds * 1000,
       answerRevealed: false,
       revealedCorrectIndex: null,
-      revealedExplanation: null,
+      revealedExplanation: "",
       pausedRemaining: null
     });
 
     currentQuestionIndex = index;
+
     renderQuestionPreview(question, index);
     updateControlButtons("active", false);
+
     controlMessage(`Question ${index + 1} is now live.`);
   }
 
@@ -568,20 +651,32 @@ if (section) {
       $("startGameBtn").disabled = true;
       controlMessage("Preparing the game...");
 
-      const snap = await get(ref(db, "gamePrivate/" + currentGameId));
-      if (!snap.exists()) throw new Error("Private questions could not be found.");
+      const snap = await get(
+        ref(db, "gamePrivate/" + currentGameId)
+      );
+
+      if (!snap.exists()) {
+        throw new Error("Private questions could not be found.");
+      }
 
       const data = snap.val();
-      if (data.ownerUid !== teacherUid) throw new Error("You are not the owner of this game.");
+
+      if (data.ownerUid !== teacherUid) {
+        throw new Error("You are not the owner of this game.");
+      }
 
       currentGameQuestions = Object.values(data.questions || {});
-      if (!currentGameQuestions.length) throw new Error("This game has no questions.");
+
+      if (!currentGameQuestions.length) {
+        throw new Error("This game has no questions.");
+      }
 
       if (progressionMode === "individual") {
         await startIndividualGame();
       } else {
         await showQuestion(0);
       }
+
     } catch (error) {
       console.error(error);
       controlMessage(error.message || "Could not start the game.", true);
@@ -591,19 +686,29 @@ if (section) {
   }
 
   async function refreshRanks() {
-    const snap = await get(ref(db, "gameScores/" + currentGameId));
+    const snap = await get(
+      ref(db, "gameScores/" + currentGameId)
+    );
+
     const scores = snap.val() || {};
+
     const ranked = Object.entries(scores).sort(
-      (a, b) => (Number(b[1].score) || 0) - (Number(a[1].score) || 0)
+      (a, b) =>
+        (Number(b[1].score) || 0) -
+        (Number(a[1].score) || 0)
     );
 
     const updates = {};
+
     ranked.forEach(([uid], index) => {
       updates[uid + "/rank"] = index + 1;
     });
 
     if (Object.keys(updates).length) {
-      await update(ref(db, "gameScores/" + currentGameId), updates);
+      await update(
+        ref(db, "gameScores/" + currentGameId),
+        updates
+      );
     }
   }
 
@@ -614,62 +719,95 @@ if (section) {
     ]);
 
     const player = playerSnap.val();
+
     if (!player) return;
 
     const previous = scoreSnap.val() || {};
+
     let points = 0;
     let correct = 0;
     let answered = 0;
 
     if (answer) {
       answered = 1;
-      const submittedAt = Number(answer.submittedAt) || 0;
-      const onTime = submittedAt > 0 && submittedAt <= deadline;
 
-      if (onTime && Number(answer.choiceIndex) === Number(question.correctIndex)) {
+      const submittedAt = Number(answer.submittedAt) || 0;
+      const onTime =
+        submittedAt > 0 &&
+        submittedAt <= Number(deadline);
+
+      if (
+        onTime &&
+        Number(answer.choiceIndex) === Number(question.correctIndex)
+      ) {
         correct = 1;
         points = 100;
 
-        if ($("gameMode").value === "speed") {
-          const seconds = Math.max(0, Math.floor((deadline - submittedAt) / 1000));
+        if (gameMode === "speed") {
+          const seconds = Math.max(
+            0,
+            Math.floor((Number(deadline) - submittedAt) / 1000)
+          );
+
           points += Math.min(100, seconds * 5);
         }
       }
     }
 
-    await set(ref(db, `gameScores/${currentGameId}/${uid}`), {
-      name: player.name,
-      section: player.section,
-      score: (Number(previous.score) || 0) + points,
-      correct: (Number(previous.correct) || 0) + correct,
-      answered: (Number(previous.answered) || 0) + answered
-    });
+    await set(
+      ref(db, `gameScores/${currentGameId}/${uid}`),
+      {
+        name: player.name,
+        section: player.section,
+        score: (Number(previous.score) || 0) + points,
+        correct: (Number(previous.correct) || 0) + correct,
+        answered: (Number(previous.answered) || 0) + answered
+      }
+    );
 
     await refreshRanks();
   }
 
   async function revealIndividualStudent(uid, state, answer) {
-    const privateSnap = await get(ref(db, "gamePrivate/" + currentGameId));
+    const privateSnap = await get(
+      ref(db, "gamePrivate/" + currentGameId)
+    );
+
     const privateData = privateSnap.val() || {};
     const order = privateData.studentOrders?.[uid];
     const position = Number(state.currentQuestionIndex);
-    const question = getStudentQuestion(uid, position, { [uid]: order });
+
+    const question = getStudentQuestion(uid, position, {
+      [uid]: order
+    });
 
     if (!question) return;
 
     const deadline = Number(state.answerDeadline) || 0;
-    await updateIndividualScores(uid, answer, question, deadline);
 
-    await update(ref(db, `gameStudentState/${currentGameId}/${uid}`), {
-      answerRevealed: true,
-      revealedCorrectIndex: Number(question.correctIndex),
-      revealedExplanation: question.explanation || ""
-    });
+    await updateIndividualScores(
+      uid,
+      answer,
+      question,
+      deadline
+    );
+
+    await update(
+      ref(db, `gameStudentState/${currentGameId}/${uid}`),
+      {
+        answerRevealed: true,
+        revealedCorrectIndex: Number(question.correctIndex),
+        revealedExplanation: question.explanation || ""
+      }
+    );
   }
 
   async function processIndividualAnswer(uid, key, answer, answerId) {
     if (processingAnswers.has(answerId)) return;
+
     processingAnswers.add(answerId);
+
+    let successfullyProcessed = false;
 
     try {
       const [stateSnap, gameSnap] = await Promise.all([
@@ -680,37 +818,59 @@ if (section) {
       const state = stateSnap.val();
       const game = gameSnap.val();
 
-      if (!state || !game || game.status !== "active" || state.finished) return;
-      if (state.answerRevealed === true) return;
+      if (!state || !game || game.status !== "active") return;
+      if (state.finished || state.answerRevealed) return;
 
       const position = Number(state.currentQuestionIndex);
+
       if (key !== "q" + position) return;
       if (Number(answer.questionIndex) !== position) return;
 
-      const privateSnap = await get(ref(db, "gamePrivate/" + currentGameId));
+      const privateSnap = await get(
+        ref(db, "gamePrivate/" + currentGameId)
+      );
+
       const privateData = privateSnap.val() || {};
       const order = privateData.studentOrders?.[uid];
-      const question = getStudentQuestion(uid, position, { [uid]: order });
+
+      const question = getStudentQuestion(uid, position, {
+        [uid]: order
+      });
 
       if (!question) return;
 
       const deadline = Number(state.answerDeadline) || 0;
-      if (!answer.submittedAt || Number(answer.submittedAt) > deadline) {
-        // Late answers are ignored for points, but timeout progression handles them.
+
+      if (
+        !answer.submittedAt ||
+        Number(answer.submittedAt) > deadline
+      ) {
         return;
       }
 
       await revealIndividualStudent(uid, state, answer);
-      controlMessage("A student submitted an answer. Individual score updated.");
+
+      successfullyProcessed = true;
+
+      controlMessage(
+        "A student submitted an answer. Individual score updated."
+      );
 
       clearAdvanceTimer(uid);
+
       individualAdvanceTimers[uid] = setTimeout(() => {
-        advanceIndividualStudent(uid).catch(error => console.error(error));
+        advanceIndividualStudent(uid).catch(error => {
+          console.error("Automatic individual advance:", error);
+        });
       }, 3000);
 
     } catch (error) {
       console.error("Process individual answer:", error);
       controlMessage("Could not process an individual answer.", true);
+    } finally {
+      if (!successfullyProcessed) {
+        processingAnswers.delete(answerId);
+      }
     }
   }
 
@@ -727,10 +887,11 @@ if (section) {
     const privateData = privateSnap.val() || {};
     const game = gameSnap.val();
 
-    if (!state || !game || game.status !== "active" || state.finished) return;
-    if (state.answerRevealed !== true) return;
+    if (!state || !game || game.status !== "active") return;
+    if (state.finished || state.answerRevealed !== true) return;
 
     const order = privateData.studentOrders?.[uid];
+
     if (!Array.isArray(order)) return;
 
     await publishIndividualQuestion(
@@ -758,29 +919,47 @@ if (section) {
 
       if (!latestState || !game || game.status !== "active") return;
       if (latestState.finished || latestState.answerRevealed) return;
-      if (Number(latestState.currentQuestionIndex) !== position) return;
+
+      if (Number(latestState.currentQuestionIndex) !== position) {
+        return;
+      }
 
       const deadline = Number(latestState.answerDeadline) || 0;
+
       if (Date.now() < deadline) return;
+
+      const question = getStudentQuestion(uid, position, {
+        [uid]: order
+      });
+
+      if (!question) return;
 
       processedTimeouts.add(timeoutId);
 
-      const question = getStudentQuestion(uid, position, { [uid]: order });
-      if (!question) return;
-
       const answer = answerSnap.val();
-      // Late answers count as attempted but earn no points.
-      await updateIndividualScores(uid, answer, question, deadline);
 
-      await update(ref(db, `gameStudentState/${currentGameId}/${uid}`), {
-        answerRevealed: true,
-        revealedCorrectIndex: Number(question.correctIndex),
-        revealedExplanation: question.explanation || ""
-      });
+      await updateIndividualScores(
+        uid,
+        answer,
+        question,
+        deadline
+      );
+
+      await update(
+        ref(db, `gameStudentState/${currentGameId}/${uid}`),
+        {
+          answerRevealed: true,
+          revealedCorrectIndex: Number(question.correctIndex),
+          revealedExplanation: question.explanation || ""
+        }
+      );
 
       clearAdvanceTimer(uid);
+
       individualAdvanceTimers[uid] = setTimeout(() => {
-        advanceIndividualStudent(uid).catch(error => console.error(error));
+        advanceIndividualStudent(uid).catch(error => {
+          console.error("Timeout advance:", error);
+        });
       }, 3000);
 
     } catch (error) {
@@ -801,6 +980,7 @@ if (section) {
         ]);
 
         const game = gameSnap.val();
+
         if (!game || game.status !== "active") return;
 
         const states = statesSnap.val() || {};
@@ -808,10 +988,16 @@ if (section) {
 
         for (const [uid, state] of Object.entries(states)) {
           if (!state || state.finished || state.answerRevealed) continue;
+
           if (Date.now() >= Number(state.answerDeadline)) {
-            await timeoutIndividualStudent(uid, state, orders[uid]);
+            await timeoutIndividualStudent(
+              uid,
+              state,
+              orders[uid]
+            );
           }
         }
+
       } catch (error) {
         console.error("Individual timer:", error);
       }
@@ -836,54 +1022,84 @@ if (section) {
       await revealIndividualStudent(uid, state, answer);
 
       clearAdvanceTimer(uid);
+
       individualAdvanceTimers[uid] = setTimeout(() => {
-        advanceIndividualStudent(uid).catch(error => console.error(error));
+        advanceIndividualStudent(uid).catch(error => {
+          console.error(error);
+        });
       }, 3000);
     }
 
-    controlMessage("Answers revealed for students who are still answering.");
+    controlMessage(
+      "Answers revealed for students who are still answering."
+    );
   }
 
   async function pauseGame() {
     try {
-      const gameSnap = await get(ref(db, "games/" + currentGameId));
+      const gameSnap = await get(
+        ref(db, "games/" + currentGameId)
+      );
+
       const game = gameSnap.val();
+
       if (!game || game.status !== "active") return;
 
       if (progressionMode === "individual") {
         stopIndividualTimer();
 
-        const statesSnap = await get(ref(db, "gameStudentState/" + currentGameId));
+        const statesSnap = await get(
+          ref(db, "gameStudentState/" + currentGameId)
+        );
+
         const states = statesSnap.val() || {};
         const updates = {};
 
         for (const [uid, state] of Object.entries(states)) {
           if (!state || state.finished || state.answerRevealed) continue;
+
           updates[uid + "/pausedRemaining"] = Math.max(
             0,
-            Math.ceil((Number(state.answerDeadline) - Date.now()) / 1000)
+            Math.ceil(
+              (Number(state.answerDeadline) - Date.now()) / 1000
+            )
           );
+
           updates[uid + "/status"] = "paused";
         }
 
         if (Object.keys(updates).length) {
-          await update(ref(db, "gameStudentState/" + currentGameId), updates);
+          await update(
+            ref(db, "gameStudentState/" + currentGameId),
+            updates
+          );
         }
 
-        await update(ref(db, "games/" + currentGameId), { status: "paused" });
+        await update(
+          ref(db, "games/" + currentGameId),
+          { status: "paused" }
+        );
+
       } else {
         const remaining = Math.max(
           0,
-          Math.ceil((Number(game.answerDeadline) - Date.now()) / 1000)
+          Math.ceil(
+            (Number(game.answerDeadline) - Date.now()) / 1000
+          )
         );
-        await update(ref(db, "games/" + currentGameId), {
-          status: "paused",
-          pausedRemaining: remaining
-        });
+
+        await update(
+          ref(db, "games/" + currentGameId),
+          {
+            status: "paused",
+            pausedRemaining: remaining
+          }
+        );
       }
 
       updateControlButtons("paused", false);
       controlMessage("Game paused.");
+
     } catch (error) {
       console.error(error);
       controlMessage(error.message || "Could not pause the game.", true);
@@ -892,32 +1108,52 @@ if (section) {
 
   async function resumeGame() {
     try {
-      const gameSnap = await get(ref(db, "games/" + currentGameId));
+      const gameSnap = await get(
+        ref(db, "games/" + currentGameId)
+      );
+
       const game = gameSnap.val();
+
       if (!game || game.status !== "paused") return;
 
       if (progressionMode === "individual") {
-        const statesSnap = await get(ref(db, "gameStudentState/" + currentGameId));
+        const statesSnap = await get(
+          ref(db, "gameStudentState/" + currentGameId)
+        );
+
         const states = statesSnap.val() || {};
         const updates = {};
         const now = Date.now();
 
         for (const [uid, state] of Object.entries(states)) {
           if (!state || state.finished || state.answerRevealed) continue;
-          const remaining = Math.max(0, Number(state.pausedRemaining) || 0);
+
+          const remaining = Math.max(
+            0,
+            Number(state.pausedRemaining) || 0
+          );
 
           updates[uid + "/questionStartedAt"] = now;
-          updates[uid + "/answerDeadline"] = now + remaining * 1000;
+          updates[uid + "/answerDeadline"] =
+            now + remaining * 1000;
           updates[uid + "/pausedRemaining"] = null;
           updates[uid + "/status"] = "active";
         }
 
         if (Object.keys(updates).length) {
-          await update(ref(db, "gameStudentState/" + currentGameId), updates);
+          await update(
+            ref(db, "gameStudentState/" + currentGameId),
+            updates
+          );
         }
 
-        await update(ref(db, "games/" + currentGameId), { status: "active" });
+        await update(
+          ref(db, "games/" + currentGameId),
+          { status: "active" }
+        );
+
         startIndividualTimer();
+
       } else {
         if (game.answerRevealed === true) {
           updateControlButtons("paused", true);
@@ -925,18 +1161,25 @@ if (section) {
         }
 
         const now = Date.now();
-        const remaining = Math.max(0, Number(game.pausedRemaining) || 0);
+        const remaining = Math.max(
+          0,
+          Number(game.pausedRemaining) || 0
+        );
 
-        await update(ref(db, "games/" + currentGameId), {
-          status: "active",
-          questionStartedAt: now,
-          answerDeadline: now + remaining * 1000,
-          pausedRemaining: null
-        });
+        await update(
+          ref(db, "games/" + currentGameId),
+          {
+            status: "active",
+            questionStartedAt: now,
+            answerDeadline: now + remaining * 1000,
+            pausedRemaining: null
+          }
+        );
       }
 
       updateControlButtons("active", false);
       controlMessage("Game resumed.");
+
     } catch (error) {
       console.error(error);
       controlMessage(error.message || "Could not resume the game.", true);
@@ -944,23 +1187,27 @@ if (section) {
   }
 
   async function calculateScores(questionIndex, correctIndex) {
-    const [playersSnap, answersSnap, scoresSnap, gameSnap] = await Promise.all([
-      get(ref(db, "gamePlayers/" + currentGameId)),
-      get(ref(db, "gameAnswers/" + currentGameId)),
-      get(ref(db, "gameScores/" + currentGameId)),
-      get(ref(db, "games/" + currentGameId))
-    ]);
+    const [playersSnap, answersSnap, scoresSnap, gameSnap] =
+      await Promise.all([
+        get(ref(db, "gamePlayers/" + currentGameId)),
+        get(ref(db, "gameAnswers/" + currentGameId)),
+        get(ref(db, "gameScores/" + currentGameId)),
+        get(ref(db, "games/" + currentGameId))
+      ]);
 
     const players = playersSnap.val() || {};
     const answers = answersSnap.val() || {};
     const previousScores = scoresSnap.val() || {};
     const game = gameSnap.val() || {};
+
     const deadline = Number(game.answerDeadline) || 0;
     const updatedScores = {};
 
     for (const [uid, player] of Object.entries(players)) {
       const previous = previousScores[uid] || {};
-      const answer = answers[uid]?.["q" + questionIndex] ||
+
+      const answer =
+        answers[uid]?.["q" + questionIndex] ||
         answers[uid]?.[String(questionIndex)];
 
       let points = 0;
@@ -969,15 +1216,26 @@ if (section) {
 
       if (answer) {
         answered = 1;
-        const submittedAt = Number(answer.submittedAt) || 0;
-        const onTime = submittedAt > 0 && deadline > 0 && submittedAt <= deadline;
 
-        if (onTime && Number(answer.choiceIndex) === correctIndex) {
+        const submittedAt = Number(answer.submittedAt) || 0;
+        const onTime =
+          submittedAt > 0 &&
+          deadline > 0 &&
+          submittedAt <= deadline;
+
+        if (
+          onTime &&
+          Number(answer.choiceIndex) === correctIndex
+        ) {
           correct = 1;
           points = 100;
 
-          if (game.mode === "speed") {
-            const seconds = Math.max(0, Math.floor((deadline - submittedAt) / 1000));
+          if (gameMode === "speed") {
+            const seconds = Math.max(
+              0,
+              Math.floor((deadline - submittedAt) / 1000)
+            );
+
             points += Math.min(100, seconds * 5);
           }
         }
@@ -992,10 +1250,18 @@ if (section) {
       };
     }
 
-    const ranked = Object.entries(updatedScores).sort((a, b) => b[1].score - a[1].score);
-    ranked.forEach(([uid, score], index) => score.rank = index + 1);
+    const ranked = Object.entries(updatedScores).sort(
+      (a, b) => b[1].score - a[1].score
+    );
 
-    await set(ref(db, "gameScores/" + currentGameId), updatedScores);
+    ranked.forEach(([uid, score], index) => {
+      score.rank = index + 1;
+    });
+
+    await set(
+      ref(db, "gameScores/" + currentGameId),
+      updatedScores
+    );
   }
 
   async function revealAnswer() {
@@ -1006,29 +1272,50 @@ if (section) {
         return;
       }
 
-      const snap = await get(ref(db, "games/" + currentGameId));
+      const snap = await get(
+        ref(db, "games/" + currentGameId)
+      );
+
       const game = snap.val();
+
       if (!game || game.answerRevealed === true) return;
 
       const question = currentGameQuestions[currentQuestionIndex];
-      if (!question) throw new Error("Current question is missing.");
+
+      if (!question) {
+        throw new Error("Current question is missing.");
+      }
 
       controlMessage("Checking answers and calculating scores...");
-      await calculateScores(currentQuestionIndex, Number(question.correctIndex));
 
-      await update(ref(db, "games/" + currentGameId), {
-        answerRevealed: true,
-        revealedCorrectIndex: Number(question.correctIndex),
-        revealedExplanation: question.explanation || ""
-      });
+      await calculateScores(
+        currentQuestionIndex,
+        Number(question.correctIndex)
+      );
+
+      await update(
+        ref(db, "games/" + currentGameId),
+        {
+          answerRevealed: true,
+          revealedCorrectIndex: Number(question.correctIndex),
+          revealedExplanation: question.explanation || ""
+        }
+      );
 
       $("teacherCorrectAnswer").textContent =
-        "Correct answer: " + question.choices[question.correctIndex];
+        "Correct answer: " +
+        question.choices[question.correctIndex];
+
       $("teacherCorrectAnswer").classList.remove("hidden");
-      $("teacherExplanation").textContent = question.explanation || "";
+      $("teacherExplanation").textContent =
+        question.explanation || "";
 
       updateControlButtons(game.status, true);
-      controlMessage("Answer revealed. Scores and leaderboard updated.");
+
+      controlMessage(
+        "Answer revealed. Scores and leaderboard updated."
+      );
+
     } catch (error) {
       console.error(error);
       controlMessage(error.message || "Could not reveal the answer.", true);
@@ -1036,8 +1323,18 @@ if (section) {
   }
 
   async function nextIndividualQuestion() {
-    const statesSnap = await get(ref(db, "gameStudentState/" + currentGameId));
+    const statesSnap = await get(
+      ref(db, "gameStudentState/" + currentGameId)
+    );
+
     const states = statesSnap.val() || {};
+
+    const privateSnap = await get(
+      ref(db, "gamePrivate/" + currentGameId)
+    );
+
+    const privateData = privateSnap.val() || {};
+    const orders = privateData.studentOrders || {};
 
     for (const [uid, state] of Object.entries(states)) {
       if (!state || state.finished) continue;
@@ -1045,31 +1342,31 @@ if (section) {
       clearAdvanceTimer(uid);
 
       if (state.answerRevealed !== true) {
-        const privateSnap = await get(ref(db, "gamePrivate/" + currentGameId));
-        const privateData = privateSnap.val() || {};
-        const order = privateData.studentOrders?.[uid];
         const position = Number(state.currentQuestionIndex);
-        const question = getStudentQuestion(uid, position, { [uid]: order });
+
+        const question = getStudentQuestion(uid, position, {
+          [uid]: orders[uid]
+        });
 
         if (question) {
           const answerSnap = await get(
             ref(db, `gameAnswers/${currentGameId}/${uid}/q${position}`)
           );
-          await updateIndividualScores(
-            uid, answerSnap.val(), question, Number(state.answerDeadline)
+
+          await revealIndividualStudent(
+            uid,
+            state,
+            answerSnap.val()
           );
-          await update(ref(db, `gameStudentState/${currentGameId}/${uid}`), {
-            answerRevealed: true,
-            revealedCorrectIndex: Number(question.correctIndex),
-            revealedExplanation: question.explanation || ""
-          });
         }
       }
 
       await advanceIndividualStudent(uid);
     }
 
-    controlMessage("Students have been moved to their next individual question.");
+    controlMessage(
+      "Students have been moved to their next individual question."
+    );
   }
 
   async function nextQuestion() {
@@ -1086,6 +1383,7 @@ if (section) {
       }
 
       await showQuestion(currentQuestionIndex + 1);
+
     } catch (error) {
       console.error(error);
       controlMessage(error.message || "Could not load the next question.", true);
@@ -1097,8 +1395,13 @@ if (section) {
       throw new Error("Missing teacher or game information.");
     }
 
-    const historyRef = ref(db, `gameHistory/${teacherUid}/${currentGameId}`);
+    const historyRef = ref(
+      db,
+      `gameHistory/${teacherUid}/${currentGameId}`
+    );
+
     const existing = await get(historyRef);
+
     if (existing.exists()) return false;
 
     const [gameSnap, playersSnap, scoresSnap] = await Promise.all([
@@ -1108,8 +1411,14 @@ if (section) {
     ]);
 
     const game = gameSnap.val();
-    if (!game) throw new Error("The game record could not be found.");
-    if (game.ownerUid !== teacherUid) throw new Error("You are not the owner of this game.");
+
+    if (!game) {
+      throw new Error("The game record could not be found.");
+    }
+
+    if (game.ownerUid !== teacherUid) {
+      throw new Error("You are not the owner of this game.");
+    }
 
     const players = playersSnap.val() || {};
     const scores = scoresSnap.val() || {};
@@ -1117,6 +1426,7 @@ if (section) {
 
     for (const [uid, player] of Object.entries(players)) {
       const score = scores[uid] || {};
+
       historyPlayers[uid] = {
         name: String(player.name || "Student"),
         section: String(player.section || ""),
@@ -1130,7 +1440,10 @@ if (section) {
     const ranked = Object.entries(historyPlayers).sort(
       (a, b) => b[1].score - a[1].score
     );
-    ranked.forEach(([uid, player], index) => player.rank = index + 1);
+
+    ranked.forEach(([uid, player], index) => {
+      player.rank = index + 1;
+    });
 
     const record = {
       ownerUid: teacherUid,
@@ -1145,13 +1458,24 @@ if (section) {
       playerCount: Object.keys(players).length
     };
 
-    if (Object.keys(historyPlayers).length) record.players = historyPlayers;
+    if (Object.keys(historyPlayers).length) {
+      record.players = historyPlayers;
+    }
+
     await set(historyRef, record);
+
     return true;
   }
 
   async function endGame() {
     if (!currentGameId || gameBusy) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to end this game? The final results will be saved."
+    );
+
+    if (!confirmed) return;
+
     gameBusy = true;
 
     try {
@@ -1159,42 +1483,58 @@ if (section) {
       const snap = await get(gameRef);
       const game = snap.val();
 
-      if (!game) throw new Error("The game could not be found.");
-      if (game.ownerUid !== teacherUid) throw new Error("You are not the owner of this game.");
+      if (!game) {
+        throw new Error("The game could not be found.");
+      }
+
+      if (game.ownerUid !== teacherUid) {
+        throw new Error("You are not the owner of this game.");
+      }
 
       if (game.status !== "finished") {
-        const confirmed = window.confirm(
-          "Are you sure you want to end this game? The final results will be saved."
-        );
-        if (!confirmed) return;
         await update(gameRef, { status: "finished" });
       }
 
       stopIndividualTimer();
-      Object.keys(individualAdvanceTimers).forEach(clearAdvanceTimer);
+
+      Object.keys(individualAdvanceTimers).forEach(uid => {
+        clearAdvanceTimer(uid);
+      });
 
       if (progressionMode === "individual") {
-        const statesSnap = await get(ref(db, "gameStudentState/" + currentGameId));
+        const statesSnap = await get(
+          ref(db, "gameStudentState/" + currentGameId)
+        );
+
         const states = statesSnap.val() || {};
         const updates = {};
 
         for (const [uid, state] of Object.entries(states)) {
-          if (!state || state.finished) continue;
+          if (!state) continue;
+
           updates[uid + "/finished"] = true;
           updates[uid + "/status"] = "finished";
         }
 
         if (Object.keys(updates).length) {
-          await update(ref(db, "gameStudentState/" + currentGameId), updates);
+          await update(
+            ref(db, "gameStudentState/" + currentGameId),
+            updates
+          );
         }
       }
 
       controlMessage("Saving completed game and final results...");
+
       const saved = await saveGameHistory();
 
       [
-        "startGameBtn", "pauseGameBtn", "resumeGameBtn",
-        "revealAnswerBtn", "nextQuestionBtn", "endGameBtn"
+        "startGameBtn",
+        "pauseGameBtn",
+        "resumeGameBtn",
+        "revealAnswerBtn",
+        "nextQuestionBtn",
+        "endGameBtn"
       ].forEach(hideButton);
 
       if (stopPlayersListener) stopPlayersListener();
@@ -1207,13 +1547,20 @@ if (section) {
       stopAnswersListener = null;
       stopStudentStatesListener = null;
 
-      controlMessage(saved
-        ? "Game finished successfully. Final results and participants have been saved to Game History."
-        : "This game was already saved to Game History. No duplicate record was created."
+      controlMessage(
+        saved
+          ? "Game finished successfully. Final results and participants have been saved to Game History."
+          : "This game was already saved to Game History. No duplicate record was created."
       );
+
     } catch (error) {
       console.error(error);
-      controlMessage("Saving game history failed: " + (error.message || error), true);
+
+      controlMessage(
+        "Saving game history failed: " + (error.message || error),
+        true
+      );
+
     } finally {
       gameBusy = false;
     }
@@ -1221,6 +1568,7 @@ if (section) {
 
   async function createGame(event) {
     event.preventDefault();
+
     if (gameBusy || !teacherUid) return;
 
     message("");
@@ -1233,24 +1581,35 @@ if (section) {
     const selectedProgression = $("gameProgression").value;
     const matches = availableQuestions();
 
-    if (!grade || !topic) return message("Please select a grade and topic.", true);
+    if (!grade || !topic) {
+      return message("Please select a grade and topic.", true);
+    }
+
     if (!Number.isInteger(count) || count < 1 || count > 50) {
       return message("Choose between 1 and 50 questions.", true);
     }
+
     if (!Number.isInteger(timer) || timer < 5 || timer > 120) {
       return message("Timer must be between 5 and 120 seconds.", true);
     }
+
     if (count > matches.length) {
-      return message(`Only ${matches.length} questions are available.`, true);
+      return message(
+        `Only ${matches.length} questions are available.`,
+        true
+      );
     }
+
     if (!["classic", "speed"].includes(mode)) {
       return message("Please select a valid game mode.", true);
     }
+
     if (!["synchronized", "individual"].includes(selectedProgression)) {
       return message("Please select a valid progression mode.", true);
     }
 
     gameBusy = true;
+
     $("createGameBtn").disabled = true;
     $("createGameBtn").textContent = "Creating game...";
 
@@ -1260,8 +1619,12 @@ if (section) {
 
     try {
       const selected = shuffle(matches).slice(0, count);
+
       gameId = push(ref(db, "games")).key;
-      if (!gameId) throw new Error("Could not create a game ID.");
+
+      if (!gameId) {
+        throw new Error("Could not create a game ID.");
+      }
 
       const privateQuestions = selected.map(q => ({
         grade: q.grade,
@@ -1288,27 +1651,41 @@ if (section) {
 
       for (let attempt = 0; attempt < 15; attempt++) {
         const pin = makePin();
+
         if (await reservePin(gameId, pin)) {
           reservedPin = pin;
           break;
         }
       }
 
-      if (!reservedPin) throw new Error("Could not reserve a unique PIN.");
+      if (!reservedPin) {
+        throw new Error("Could not reserve a unique PIN.");
+      }
 
       currentStage = "Saving public game";
-      await set(ref(db, "games/" + gameId), publicGame);
+
+      await set(
+        ref(db, "games/" + gameId),
+        publicGame
+      );
 
       currentStage = "Saving private questions";
-      await set(ref(db, "gamePrivate/" + gameId), {
-        ownerUid: teacherUid,
-        questions: privateQuestions
-      });
+
+      await set(
+        ref(db, "gamePrivate/" + gameId),
+        {
+          ownerUid: teacherUid,
+          questions: privateQuestions
+        }
+      );
 
       currentGameId = gameId;
       currentGameQuestions = [];
       currentQuestionIndex = -1;
+
       progressionMode = selectedProgression;
+      gameMode = mode;
+      gameTimerSeconds = timer;
 
       processingAnswers.clear();
       processedTimeouts.clear();
@@ -1320,6 +1697,7 @@ if (section) {
 
       $("gamePin").textContent = reservedPin;
       $("gameJoinLink").value = joinUrl;
+
       $("gameQr").src =
         "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" +
         encodeURIComponent(joinUrl);
@@ -1328,13 +1706,16 @@ if (section) {
       $("activeGameCard").scrollIntoView({ behavior: "smooth" });
 
       showControls();
+
       $("teacherQuestionPreview").classList.add("hidden");
 
       currentStage = "Opening student lobby";
+
       listenToPlayers(gameId);
       listenToScores(gameId);
 
       message("Game created successfully.");
+
     } catch (error) {
       console.error(error);
 
@@ -1356,12 +1737,16 @@ if (section) {
       }
 
       message(
-        "Could not create the game during " + currentStage +
-        ": " + (error.message || error),
+        "Could not create the game during " +
+        currentStage +
+        ": " +
+        (error.message || error),
         true
       );
+
     } finally {
       gameBusy = false;
+
       $("createGameBtn").disabled = false;
       $("createGameBtn").textContent = "Create Game";
     }
@@ -1373,17 +1758,28 @@ if (section) {
 
   $("copyGameLink").addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText($("gameJoinLink").value);
+      await navigator.clipboard.writeText(
+        $("gameJoinLink").value
+      );
+
       message("Joining link copied.");
+
     } catch {
-      message("Copy failed. Select and copy the joining link manually.", true);
+      message(
+        "Copy failed. Select and copy the joining link manually.",
+        true
+      );
     }
   });
 
   $("copyGamePin").addEventListener("click", async () => {
     try {
-      await navigator.clipboard.writeText($("gamePin").textContent);
+      await navigator.clipboard.writeText(
+        $("gamePin").textContent
+      );
+
       message("Game PIN copied.");
+
     } catch {
       message("Copy failed. You can select the PIN manually.", true);
     }
@@ -1400,7 +1796,10 @@ if (section) {
     if (!user || user.isAnonymous) return;
 
     try {
-      const allowed = await get(ref(db, "allowedTeachers/" + user.uid));
+      const allowed = await get(
+        ref(db, "allowedTeachers/" + user.uid)
+      );
+
       if (allowed.val() !== true) return;
 
       teacherUid = user.uid;
@@ -1408,6 +1807,7 @@ if (section) {
       const settingsSnap = await get(
         ref(db, "teachers/" + teacherUid + "/settings")
       );
+
       const settings = settingsSnap.val() || {};
 
       $("gameTimer").value = settings.defaultTimer || 20;
@@ -1436,8 +1836,10 @@ if (section) {
       );
 
       updateTopics();
+
     } catch (error) {
       console.error(error);
+
       showLoadMessage(
         "Could not load your questions or settings. Check Firebase permissions.",
         true
