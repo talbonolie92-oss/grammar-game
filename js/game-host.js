@@ -156,7 +156,9 @@ if (section) {
         ? matches.length + " question(s) available for this selection."
         : "Select a grade and topic to see available questions.";
 
-    $("gameQuestionCount").max = Math.max(1, matches.length);
+    // Allow the teacher to enter up to 50.
+    // createGame() checks whether enough questions actually exist.
+    $("gameQuestionCount").max = 50;
   }
 
   function updateTopics() {
@@ -217,7 +219,8 @@ if (section) {
     const entries = Object.entries(players || {});
 
     $("playerCount").textContent =
-      entries.length + (entries.length === 1 ? " student joined" : " students joined");
+      entries.length +
+      (entries.length === 1 ? " student joined" : " students joined");
 
     if (!entries.length) {
       const empty = document.createElement("p");
@@ -251,7 +254,10 @@ if (section) {
       (snapshot) => renderPlayers(snapshot.val() || {}),
       (error) => {
         console.error("Lobby listener error:", error);
-        showLoadMessage("Could not load the student lobby. Check Firebase rules.", true);
+        showLoadMessage(
+          "Could not load the student lobby. Check Firebase rules.",
+          true
+        );
       }
     );
   }
@@ -261,6 +267,7 @@ if (section) {
       ref(db, "gamePins/" + pin),
       (current) => {
         if (current !== null) return;
+
         return {
           gameId,
           ownerUid: teacherUid,
@@ -305,8 +312,11 @@ if (section) {
     }
 
     if (count > matches.length) {
-      message("Only " + matches.length +
-        " questions are available for this topic. Add more questions or choose a smaller number.", true);
+      message(
+        "Only " + matches.length +
+        " questions are available for this topic. Add more questions or choose a smaller number.",
+        true
+      );
       return;
     }
 
@@ -321,15 +331,17 @@ if (section) {
 
     let reservedPin = null;
     let gameId = null;
+    let currentStage = "Preparing game";
 
     try {
       const selected = shuffle(matches).slice(0, count);
 
       gameId = push(ref(db, "games")).key;
 
-      if (!gameId) throw new Error("Could not create a game ID.");
+      if (!gameId) {
+        throw new Error("Could not create a game ID.");
+      }
 
-      // Keep the correct answers in a separate, private database path.
       const privateQuestions = selected.map((q) => ({
         grade: q.grade,
         topic: q.topic,
@@ -350,9 +362,12 @@ if (section) {
         createdAt: Date.now()
       };
 
-      // Reserve a unique PIN before publishing the game.
+      // Stage 1: Reserve a unique six-digit PIN.
+      currentStage = "Reserving game PIN";
+
       for (let attempt = 0; attempt < 15; attempt++) {
         const pin = makePin();
+
         if (await reservePin(gameId, pin)) {
           reservedPin = pin;
           break;
@@ -363,7 +378,14 @@ if (section) {
         throw new Error("Could not reserve a unique PIN. Please try again.");
       }
 
+      // Stage 2: Save public game information.
+      currentStage = "Saving public game";
+
       await set(ref(db, "games/" + gameId), publicGame);
+
+      // Stage 3: Save questions and correct answers privately.
+      currentStage = "Saving private questions";
+
       await set(ref(db, "gamePrivate/" + gameId), {
         ownerUid: teacherUid,
         questions: privateQuestions
@@ -386,7 +408,11 @@ if (section) {
       $("activeGameCard").classList.remove("hidden");
       $("activeGameCard").scrollIntoView({ behavior: "smooth" });
 
+      // Stage 4: Open the live student lobby.
+      currentStage = "Opening student lobby";
+
       listenToPlayers(gameId);
+
       message("Game created successfully.");
 
     } catch (error) {
@@ -410,9 +436,8 @@ if (section) {
       }
 
       message(
-        error.code === "PERMISSION_DENIED"
-          ? "Firebase denied this operation. The Phase 4 rules must be published first."
-          : "Could not create the game: " + (error.message || error),
+        "Could not create the game during " + currentStage +
+        ": " + (error.message || error),
         true
       );
 
@@ -432,7 +457,10 @@ if (section) {
       await navigator.clipboard.writeText($("gameJoinLink").value);
       message("Joining link copied.");
     } catch {
-      message("Copy failed. Select and copy the joining link manually.", true);
+      message(
+        "Copy failed. Select and copy the joining link manually.",
+        true
+      );
     }
   });
 
@@ -490,6 +518,7 @@ if (section) {
 
     } catch (error) {
       console.error("Game setup error:", error);
+
       showLoadMessage(
         "Could not load your questions or settings. Check Firebase permissions.",
         true
