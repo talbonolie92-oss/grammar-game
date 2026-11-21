@@ -11,6 +11,8 @@
 
   <main class="screen center-screen">
     <div class="card narrow">
+
+      <!-- Branding -->
       <div class="login-brand">
         <span class="school-logo lg">
           <span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span>
@@ -21,12 +23,15 @@
         <p class="tagline">Learn. Practice. Complete.</p>
       </div>
 
+      <!-- Loading -->
       <div id="joinLoading">
         <p class="muted center">Connecting to the game...</p>
       </div>
 
+      <!-- Error -->
       <div id="joinError" class="notice hidden" role="alert"></div>
 
+      <!-- Join Form -->
       <section id="joinFormSection" class="hidden">
         <h2>Join a game</h2>
         <p id="gameDetails" class="muted"></p>
@@ -45,10 +50,12 @@
           <button id="joinGameBtn" class="btn block" type="submit">
             Join game
           </button>
+
           <p id="joinMessage" class="status" role="status"></p>
         </form>
       </section>
 
+      <!-- Waiting Room -->
       <section id="waitingSection" class="hidden">
         <h2>You're in!</h2>
         <p class="muted">Your teacher has been notified that you joined.</p>
@@ -63,13 +70,61 @@
         </div>
       </section>
 
+      <!-- Live Gameplay -->
+      <section id="gamePlaySection" class="hidden">
+        <div class="row">
+          <p id="questionProgress" class="muted">Question 1</p>
+          <p class="muted">
+            Time: <strong id="questionTimer">--</strong>s
+          </p>
+        </div>
+
+        <div class="card">
+          <h2 id="liveQuestionText">Question will appear here.</h2>
+        </div>
+
+        <div id="answerChoices"></div>
+
+        <p id="answerStatus" class="status center" role="status"></p>
+        <p id="gamePlayStatus" class="muted center" role="status">
+          Choose your answer.
+        </p>
+
+        <div class="card center">
+          <p class="muted small-text">Your Score</p>
+          <h2 id="studentScore">0</h2>
+        </div>
+      </section>
+
+      <!-- Final Results -->
+      <section id="resultsSection" class="hidden">
+        <h2 class="center">Game Completed!</h2>
+        <p class="muted center">Well done for participating!</p>
+
+        <div class="card center">
+          <p class="muted small-text">Student</p>
+          <h2 id="finalStudentName"></h2>
+
+          <p class="muted small-text">Final Score</p>
+          <h1 id="finalStudentScore">0</h1>
+
+          <p id="finalStudentRank" class="muted"></p>
+        </div>
+
+        <h2>Leaderboard</h2>
+        <div id="studentLeaderboard"></div>
+      </section>
+
+      <!-- Home Link -->
       <p class="muted center">
         <a href="index.html">Back to home</a>
       </p>
+
     </div>
   </main>
 
   <script src="js/branding.js" defer></script>
   <script type="module" src="js/student-join.js"></script>
+
 </body>
 </html>
