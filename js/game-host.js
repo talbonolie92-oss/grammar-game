@@ -1,6 +1,7 @@
 
 /* ------------------------------------------------------------
-   js/game-host.js — Phase 5
+   js/game-host.js — Phase 5 + Completed Game History
+
    Teacher controls:
    - Create game and manage waiting lobby
    - Start, pause, and resume game
@@ -8,6 +9,7 @@
    - Reveal answers
    - Calculate scores and leaderboard
    - Move to next question and end game
+   - Save completed games and participant results to history
    ------------------------------------------------------------ */
 
 import { auth, db } from "./firebase-config.js";
@@ -455,6 +457,7 @@ if (section) {
     } else if (status === "paused") {
       showButton("resumeGameBtn");
       showButton("endGameBtn");
+
       if (!revealed) showButton("revealAnswerBtn");
       if (revealed) showButton("nextQuestionBtn");
     }
@@ -598,98 +601,96 @@ if (section) {
     }
   }
 
+  async function calculateScores(questionIndex, correctIndex) {
+    const playersSnapshot = await get(
+      ref(db, "gamePlayers/" + currentGameId)
+    );
 
-async function calculateScores(questionIndex, correctIndex) {
-  const playersSnapshot = await get(
-    ref(db, "gamePlayers/" + currentGameId)
-  );
+    const answersSnapshot = await get(
+      ref(db, "gameAnswers/" + currentGameId)
+    );
 
-  const answersSnapshot = await get(
-    ref(db, "gameAnswers/" + currentGameId)
-  );
+    const scoresSnapshot = await get(
+      ref(db, "gameScores/" + currentGameId)
+    );
 
-  const scoresSnapshot = await get(
-    ref(db, "gameScores/" + currentGameId)
-  );
+    const gameSnapshot = await get(
+      ref(db, "games/" + currentGameId)
+    );
 
-  const gameSnapshot = await get(
-    ref(db, "games/" + currentGameId)
-  );
+    const players = playersSnapshot.val() || {};
+    const answers = answersSnapshot.val() || {};
+    const previousScores = scoresSnapshot.val() || {};
+    const game = gameSnapshot.val() || {};
 
-  const players = playersSnapshot.val() || {};
-  const answers = answersSnapshot.val() || {};
-  const previousScores = scoresSnapshot.val() || {};
-  const game = gameSnapshot.val() || {};
+    const answerDeadline = Number(game.answerDeadline) || 0;
+    const mode = game.mode;
 
-  const answerDeadline = Number(game.answerDeadline) || 0;
-  const mode = game.mode;
+    const updatedScores = {};
 
-  const updatedScores = {};
+    for (const [uid, player] of Object.entries(players)) {
+      const previous = previousScores[uid] || {};
 
-  for (const [uid, player] of Object.entries(players)) {
-    const previous = previousScores[uid] || {};
+      const oldScore = Number(previous.score) || 0;
+      const oldCorrect = Number(previous.correct) || 0;
+      const oldAnswered = Number(previous.answered) || 0;
 
-    const oldScore = Number(previous.score) || 0;
-    const oldCorrect = Number(previous.correct) || 0;
-    const oldAnswered = Number(previous.answered) || 0;
+      const answer =
+        answers[uid]?.["q" + questionIndex] ||
+        answers[uid]?.[String(questionIndex)];
 
-    const answer =
-      answers[uid]?.["q" + questionIndex] ||
-      answers[uid]?.[String(questionIndex)];
+      let points = 0;
+      let correct = 0;
+      let answered = 0;
 
-    let points = 0;
-    let correct = 0;
-    let answered = 0;
+      if (answer) {
+        answered = 1;
 
-    if (answer) {
-      answered = 1;
+        const choiceIndex = Number(answer.choiceIndex);
+        const submittedAt = Number(answer.submittedAt) || 0;
 
-      const choiceIndex = Number(answer.choiceIndex);
-      const submittedAt = Number(answer.submittedAt) || 0;
+        const submittedOnTime =
+          submittedAt > 0 &&
+          answerDeadline > 0 &&
+          submittedAt <= answerDeadline;
 
-      const submittedOnTime =
-        submittedAt > 0 &&
-        answerDeadline > 0 &&
-        submittedAt <= answerDeadline;
+        if (submittedOnTime && choiceIndex === correctIndex) {
+          correct = 1;
+          points = 100;
 
-      if (submittedOnTime && choiceIndex === correctIndex) {
-        correct = 1;
-        points = 100;
+          if (mode === "speed") {
+            const secondsRemaining = Math.max(
+              0,
+              Math.floor((answerDeadline - submittedAt) / 1000)
+            );
 
-        if (mode === "speed") {
-          const secondsRemaining = Math.max(
-            0,
-            Math.floor((answerDeadline - submittedAt) / 1000)
-          );
-
-          points += Math.min(100, secondsRemaining * 5);
+            points += Math.min(100, secondsRemaining * 5);
+          }
         }
       }
+
+      updatedScores[uid] = {
+        name: player.name,
+        section: player.section,
+        score: oldScore + points,
+        correct: oldCorrect + correct,
+        answered: oldAnswered + answered
+      };
     }
 
-    updatedScores[uid] = {
-      name: player.name,
-      section: player.section,
-      score: oldScore + points,
-      correct: oldCorrect + correct,
-      answered: oldAnswered + answered
-    };
+    const ranked = Object.entries(updatedScores).sort(
+      (a, b) => b[1].score - a[1].score
+    );
+
+    ranked.forEach(([uid, score], index) => {
+      score.rank = index + 1;
+    });
+
+    await set(
+      ref(db, "gameScores/" + currentGameId),
+      updatedScores
+    );
   }
-
-  const ranked = Object.entries(updatedScores).sort(
-    (a, b) => b[1].score - a[1].score
-  );
-
-  ranked.forEach(([uid, score], index) => {
-    score.rank = index + 1;
-  });
-
-  await set(
-    ref(db, "gameScores/" + currentGameId),
-    updatedScores
-  );
-}
-
 
   async function revealAnswer() {
     try {
@@ -757,22 +758,128 @@ async function calculateScores(questionIndex, correctIndex) {
     }
   }
 
-  async function endGame() {
-    if (!currentGameId) return;
+  // Build and save a permanent snapshot of the completed game.
+  async function saveGameHistory() {
+    if (!teacherUid || !currentGameId) {
+      throw new Error("Missing teacher or game information.");
+    }
 
-    const confirmed = window.confirm(
-      "Are you sure you want to end this game?"
+    const historyRef = ref(
+      db,
+      "gameHistory/" + teacherUid + "/" + currentGameId
     );
 
-    if (!confirmed) return;
+    // Do not overwrite an existing history record.
+    const existingHistory = await get(historyRef);
+
+    if (existingHistory.exists()) {
+      return false;
+    }
+
+    const [gameSnapshot, playersSnapshot, scoresSnapshot] =
+      await Promise.all([
+        get(ref(db, "games/" + currentGameId)),
+        get(ref(db, "gamePlayers/" + currentGameId)),
+        get(ref(db, "gameScores/" + currentGameId))
+      ]);
+
+    const game = gameSnapshot.val();
+
+    if (!game) {
+      throw new Error("The game record could not be found.");
+    }
+
+    if (game.ownerUid !== teacherUid) {
+      throw new Error("You are not the owner of this game.");
+    }
+
+    const players = playersSnapshot.val() || {};
+    const scores = scoresSnapshot.val() || {};
+
+    // Include every participant, even students who did not answer.
+    const historyPlayers = {};
+
+    for (const [uid, player] of Object.entries(players)) {
+      const score = scores[uid] || {};
+
+      historyPlayers[uid] = {
+        name: String(player.name || "Student"),
+        section: String(player.section || ""),
+        score: Math.max(0, Number(score.score) || 0),
+        correct: Math.max(0, Number(score.correct) || 0),
+        answered: Math.max(0, Number(score.answered) || 0),
+        rank: 1
+      };
+    }
+
+    // Recalculate final ranks from the saved scores.
+    const rankedPlayers = Object.entries(historyPlayers).sort(
+      (a, b) => b[1].score - a[1].score
+    );
+
+    rankedPlayers.forEach(([uid, player], index) => {
+      player.rank = index + 1;
+    });
+
+    const historyRecord = {
+      ownerUid: teacherUid,
+      grade: Number(game.grade),
+      topic: String(game.topic || ""),
+      mode: String(game.mode || "classic"),
+      timer: Number(game.timer),
+      questionCount: Number(game.questionCount),
+      createdAt: Number(game.createdAt) || Date.now(),
+      finishedAt: Date.now(),
+      status: "finished",
+      playerCount: Object.keys(players).length
+    };
+
+    // Firebase removes empty objects, so only add players when present.
+    if (Object.keys(historyPlayers).length > 0) {
+      historyRecord.players = historyPlayers;
+    }
+
+    await set(historyRef, historyRecord);
+
+    return true;
+  }
+
+  async function endGame() {
+    if (!currentGameId || gameBusy) return;
+
+    gameBusy = true;
 
     try {
-      await update(ref(db, "games/" + currentGameId), {
-        status: "finished"
-      });
+      const gameRef = ref(db, "games/" + currentGameId);
+      const gameSnapshot = await get(gameRef);
+      const game = gameSnapshot.val();
+
+      if (!game) {
+        throw new Error("The game could not be found.");
+      }
+
+      if (game.ownerUid !== teacherUid) {
+        throw new Error("You are not the owner of this game.");
+      }
+
+      // Ask for confirmation only if the game is not already finished.
+      if (game.status !== "finished") {
+        const confirmed = window.confirm(
+          "Are you sure you want to end this game? The final results will be saved."
+        );
+
+        if (!confirmed) return;
+
+        await update(gameRef, {
+          status: "finished"
+        });
+      }
+
+      controlMessage("Saving completed game and final results...");
+
+      const saved = await saveGameHistory();
 
       updateControlButtons("finished", false);
-      controlMessage("Game finished. Final scores are available.");
 
       hideButton("startGameBtn");
       hideButton("pauseGameBtn");
@@ -781,9 +888,38 @@ async function calculateScores(questionIndex, correctIndex) {
       hideButton("nextQuestionBtn");
       hideButton("endGameBtn");
 
+      if (stopPlayersListener) {
+        stopPlayersListener();
+        stopPlayersListener = null;
+      }
+
+      if (stopScoresListener) {
+        stopScoresListener();
+        stopScoresListener = null;
+      }
+
+      if (saved) {
+        controlMessage(
+          "Game finished successfully. Final results and participants have been saved to Game History."
+        );
+      } else {
+        controlMessage(
+          "This game was already saved to Game History. No duplicate record was created."
+        );
+      }
+
     } catch (error) {
-      console.error("End game error:", error);
-      controlMessage(error.message || "Could not end the game.", true);
+      console.error("End game / history error:", error);
+
+      controlMessage(
+        "The game may be finished, but saving its history failed: " +
+        (error.message || error) +
+        ". You can retry by using End Game again if the control is still available.",
+        true
+      );
+
+    } finally {
+      gameBusy = false;
     }
   }
 
@@ -911,8 +1047,8 @@ async function calculateScores(questionIndex, correctIndex) {
       $("activeGameCard").classList.remove("hidden");
       $("activeGameCard").scrollIntoView({ behavior: "smooth" });
 
-showControls();
-$("teacherQuestionPreview").classList.add("hidden");
+      showControls();
+      $("teacherQuestionPreview").classList.add("hidden");
 
       currentStage = "Opening student lobby";
 
