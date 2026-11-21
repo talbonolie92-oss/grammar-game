@@ -1,0 +1,84 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+
+    "allowedTeachers": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid"
+      }
+    },
+
+    "teachers": {
+      "$uid": {
+        "settings": {
+          ".read": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider === 'password' && root.child('allowedTeachers').child(auth.uid).val() === true",
+          ".write": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider === 'password' && root.child('allowedTeachers').child(auth.uid).val() === true",
+
+          "displayName": {
+            ".validate": "newData.isString() && newData.val().length <= 60"
+          },
+          "defaultTimer": {
+            ".validate": "newData.isNumber() && newData.val() >= 5 && newData.val() <= 120"
+          },
+          "defaultMode": {
+            ".validate": "newData.val() === 'classic' || newData.val() === 'speed'"
+          },
+          "showResultsEachQuestion": {
+            ".validate": "newData.isBoolean()"
+          },
+          "sections": {
+            "$sectionId": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 30"
+            }
+          },
+
+          "$other": {
+            ".validate": false
+          }
+        },
+
+        "questions": {
+          ".read": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider === 'password' && root.child('allowedTeachers').child(auth.uid).val() === true",
+          ".write": "auth != null && auth.uid === $uid && auth.token.firebase.sign_in_provider === 'password' && root.child('allowedTeachers').child(auth.uid).val() === true",
+
+          "$questionId": {
+            ".validate": "newData.hasChildren(['grade', 'topic', 'text', 'choices', 'correctIndex', 'createdAt', 'updatedAt'])",
+
+            "grade": {
+              ".validate": "newData.isNumber() && (newData.val() === 10 || newData.val() === 11 || newData.val() === 12)"
+            },
+            "topic": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 60"
+            },
+            "text": {
+              ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 500"
+            },
+            "choices": {
+              ".validate": "newData.hasChildren(['0', '1', '2', '3'])",
+              "$i": {
+                ".validate": "($i === '0' || $i === '1' || $i === '2' || $i === '3') && newData.isString() && newData.val().length >= 1 && newData.val().length <= 200"
+              }
+            },
+            "correctIndex": {
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3"
+            },
+            "explanation": {
+              ".validate": "newData.isString() && newData.val().length <= 500"
+            },
+            "createdAt": {
+              ".validate": "newData.isNumber()"
+            },
+            "updatedAt": {
+              ".validate": "newData.isNumber()"
+            },
+
+            "$other": {
+              ".validate": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
