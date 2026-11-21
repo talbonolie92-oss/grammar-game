@@ -1,12 +1,14 @@
 
 // ------------------------------------------------------------
-// js/teacher.js — Phase 6
+// js/teacher.js — Phase 6 + Activity Deletion
 // - Teacher login and logout
 // - Settings and class sections
 // - Question Bank integration
 // - Completed Game History
 // - Dashboard statistics and recent sessions
-// - Game history filters, participant details and performance reports
+// - Game history filters and participant details
+// - Performance reports
+// - Select, delete selected, and clear completed activities
 // ------------------------------------------------------------
 
 import { auth, db, configMissing } from "./firebase-config.js";
@@ -26,6 +28,7 @@ import { startQuestionBank, stopQuestionBank } from "./questions.js";
 
 const $ = (id) => document.getElementById(id);
 
+// ---------- Firebase configuration ----------
 if (configMissing) {
   showScreen("configScreen");
   throw new Error("Firebase settings are missing. Edit js/firebase-config.js");
@@ -63,6 +66,8 @@ let editingValue = "";
 
 let historyGames = [];
 let selectedHistoryId = null;
+let selectedHistoryIds = new Set();
+let deletingHistory = false;
 
 // ---------- Paths ----------
 function settingsPath() {
@@ -154,6 +159,8 @@ onAuthStateChanged(auth, async (u) => {
 
     user = null;
     historyGames = [];
+    selectedHistoryIds.clear();
+
     $("password").value = "";
     showScreen("loginScreen");
     return;
@@ -191,6 +198,7 @@ function startApp() {
   formFilled = false;
   editingId = null;
   selectedHistoryId = null;
+  selectedHistoryIds.clear();
 
   $("appError").classList.add("hidden");
   showScreen("appScreen");
@@ -522,7 +530,7 @@ async function saveRename(id) {
 }
 
 // ============================================================
-// PHASE 6: GAME HISTORY LISTENER
+// GAME HISTORY LISTENER
 // ============================================================
 
 function startHistoryListener() {
@@ -548,6 +556,12 @@ function startHistoryListener() {
           (Number(b.finishedAt) || 0) -
           (Number(a.finishedAt) || 0)
         );
+
+      selectedHistoryIds = new Set(
+        [...selectedHistoryIds].filter((id) =>
+          historyGames.some((game) => game.id === id)
+        )
+      );
 
       renderHistory();
       renderPerformanceReports();
@@ -581,7 +595,148 @@ function showHistoryError(message) {
 }
 
 // ============================================================
-// PHASE 6: HISTORY HELPERS
+// GAME ACTIVITY DELETION
+// ============================================================
+
+function updateHistorySelectionCount() {
+  const count = $("historySelectionCount");
+  if (!count) return;
+
+  const selected = [...selectedHistoryIds].filter((id) =>
+    historyGames.some((game) => game.id === id)
+  );
+
+  count.textContent = selected.length + " selected";
+}
+
+function selectVisibleHistoryGames(checked) {
+  getFilteredGames().forEach((game) => {
+    if (checked) {
+      selectedHistoryIds.add(game.id);
+    } else {
+      selectedHistoryIds.delete(game.id);
+    }
+  });
+
+  renderHistory();
+}
+
+async function deleteGameActivities(gameIds) {
+  if (!user || deletingHistory) return;
+
+  const uniqueIds = [...new Set(gameIds)].filter((id) =>
+    historyGames.some((game) => game.id === id)
+  );
+
+  if (!uniqueIds.length) {
+    alert("Please select at least one completed game.");
+    return;
+  }
+
+  deletingHistory = true;
+  updateHistorySelectionCount();
+
+  try {
+    const updates = {};
+
+    // Prepare deletion of every selected completed game.
+    for (const gameId of uniqueIds) {
+      const historyGame = historyGames.find((game) => game.id === gameId);
+
+      if (!historyGame || historyGame.status !== "finished") {
+        throw new Error("Only completed games can be deleted.");
+      }
+
+      if (historyGame.ownerUid !== user.uid) {
+        throw new Error("You can only delete your own game activities.");
+      }
+
+      // Double-check that the game is not currently active.
+      const gameSnap = await get(ref(db, "games/" + gameId));
+      const liveGame = gameSnap.val();
+
+      if (liveGame && liveGame.status !== "finished") {
+        throw new Error("An active or unfinished game cannot be deleted.");
+      }
+
+      // Remove the activity and all related game records.
+      updates["gameHistory/" + user.uid + "/" + gameId] = null;
+      updates["games/" + gameId] = null;
+      updates["gamePrivate/" + gameId] = null;
+      updates["gameStudentState/" + gameId] = null;
+      updates["gamePlayers/" + gameId] = null;
+      updates["gameAnswers/" + gameId] = null;
+      updates["gameScores/" + gameId] = null;
+    }
+
+    // One atomic update: all selected records are deleted together.
+    await update(ref(db), updates);
+
+    uniqueIds.forEach((id) => {
+      selectedHistoryIds.delete(id);
+
+      if (selectedHistoryId === id) {
+        selectedHistoryId = null;
+      }
+    });
+
+    alert(
+      uniqueIds.length === 1
+        ? "Completed game deleted successfully."
+        : uniqueIds.length + " completed games deleted successfully."
+    );
+  } catch (error) {
+    console.error("Delete game activities:", error);
+
+    alert(
+      "Could not delete the selected activities.\n\n" +
+      (error.message || error) +
+      "\n\nPlease check your latest Firebase database rules."
+    );
+  } finally {
+    deletingHistory = false;
+    updateHistorySelectionCount();
+    renderHistory();
+  }
+}
+
+async function deleteSelectedHistoryGames() {
+  const ids = [...selectedHistoryIds];
+
+  if (!ids.length) {
+    alert("Please select at least one completed game.");
+    return;
+  }
+
+  const confirmed = confirm(
+    "Delete " + ids.length + " selected completed game(s)?\n\n" +
+    "Their history, reports, participants, scores and related game data will be permanently deleted."
+  );
+
+  if (!confirmed) return;
+
+  await deleteGameActivities(ids);
+}
+
+async function clearAllHistoryGames() {
+  if (!historyGames.length) {
+    alert("There are no completed games to delete.");
+    return;
+  }
+
+  const confirmed = confirm(
+    "Delete ALL " + historyGames.length + " completed games?\n\n" +
+    "This permanently removes their history, reports, participants, scores and related game data.\n\n" +
+    "Active games, Question Bank and Settings will not be deleted."
+  );
+
+  if (!confirmed) return;
+
+  await deleteGameActivities(historyGames.map((game) => game.id));
+}
+
+// ============================================================
+// HISTORY HELPERS
 // ============================================================
 
 function formatDate(timestamp) {
@@ -656,7 +811,7 @@ function createSelect(id, labelText, options) {
 }
 
 // ============================================================
-// PHASE 6: GAME HISTORY UI
+// GAME HISTORY UI
 // ============================================================
 
 function prepareHistorySection() {
@@ -705,17 +860,70 @@ function prepareHistorySection() {
 
   const count = createTextElement("p", "muted", "");
   count.id = "historyCount";
-  filters.appendChild(count);
+
+  const selectionCount = createTextElement("p", "muted", "0 selected");
+  selectionCount.id = "historySelectionCount";
+
+  const activityActions = document.createElement("div");
+  activityActions.className = "actions";
+
+  const selectAllButton = createTextElement(
+    "button",
+    "btn small ghost",
+    "Select All"
+  );
+  selectAllButton.type = "button";
+  selectAllButton.addEventListener("click", () =>
+    selectVisibleHistoryGames(true)
+  );
+
+  const deselectButton = createTextElement(
+    "button",
+    "btn small ghost",
+    "Deselect All"
+  );
+  deselectButton.type = "button";
+  deselectButton.addEventListener("click", () =>
+    selectVisibleHistoryGames(false)
+  );
+
+  const deleteSelectedButton = createTextElement(
+    "button",
+    "btn small danger",
+    "Delete Selected"
+  );
+  deleteSelectedButton.type = "button";
+  deleteSelectedButton.addEventListener("click", deleteSelectedHistoryGames);
+
+  const clearAllButton = createTextElement(
+    "button",
+    "btn small danger",
+    "Clear All Completed Games"
+  );
+  clearAllButton.type = "button";
+  clearAllButton.addEventListener("click", clearAllHistoryGames);
+
+  activityActions.append(
+    selectAllButton,
+    deselectButton,
+    deleteSelectedButton,
+    clearAllButton
+  );
+
+  filters.append(count, selectionCount, activityActions);
 
   const list = document.createElement("div");
   list.id = "historyList";
 
   section.append(header, filters, list);
 
-  ["historyGradeFilter", "historyTopicFilter", "historyModeFilter"]
-    .forEach((id) => {
-      $(id).addEventListener("change", renderHistory);
-    });
+  [
+    "historyGradeFilter",
+    "historyTopicFilter",
+    "historyModeFilter"
+  ].forEach((id) => {
+    $(id).addEventListener("change", renderHistory);
+  });
 }
 
 function updateTopicFilter() {
@@ -776,6 +984,14 @@ function renderHistory() {
 
   const games = getFilteredGames();
 
+  selectedHistoryIds = new Set(
+    [...selectedHistoryIds].filter((id) =>
+      historyGames.some((game) => game.id === id)
+    )
+  );
+
+  updateHistorySelectionCount();
+
   count.textContent =
     games.length + (games.length === 1 ? " completed game" : " completed games");
 
@@ -827,7 +1043,30 @@ function renderHistory() {
       )
     );
 
-    heading.appendChild(titleArea);
+    const selectionLabel = document.createElement("label");
+    selectionLabel.className = "history-select-label";
+
+    const selectionCheckbox = document.createElement("input");
+    selectionCheckbox.type = "checkbox";
+    selectionCheckbox.checked = selectedHistoryIds.has(game.id);
+    selectionCheckbox.disabled = deletingHistory;
+    selectionCheckbox.setAttribute(
+      "aria-label",
+      "Select " + (game.topic || "completed game")
+    );
+
+    selectionCheckbox.addEventListener("change", () => {
+      if (selectionCheckbox.checked) {
+        selectedHistoryIds.add(game.id);
+      } else {
+        selectedHistoryIds.delete(game.id);
+      }
+
+      updateHistorySelectionCount();
+    });
+
+    selectionLabel.appendChild(selectionCheckbox);
+    heading.append(selectionLabel, titleArea);
 
     const detailsButton = document.createElement("button");
     detailsButton.type = "button";
@@ -949,7 +1188,7 @@ function createPlayerDetails(game) {
 }
 
 // ============================================================
-// PHASE 6: DASHBOARD
+// DASHBOARD
 // ============================================================
 
 function renderDashboardStats() {
@@ -971,7 +1210,6 @@ function renderDashboardStats() {
   $("statGames").textContent = historyGames.length;
   $("statStudents").textContent = uniqueStudents.size;
 
-  // Keep the existing settings section count.
   $("statSections").textContent = classSections.length;
 }
 
@@ -1049,10 +1287,8 @@ function renderDashboardHistory() {
   });
 }
 
-
 // ============================================================
-// PHASE 6: PERFORMANCE REPORTS
-// Reports are calculated from completed games in gameHistory.
+// PERFORMANCE REPORTS
 // ============================================================
 
 function prepareReportsSection() {
@@ -1074,6 +1310,7 @@ function prepareReportsSection() {
 
   const filters = document.createElement("div");
   filters.className = "card";
+
   const filterGrid = document.createElement("div");
   filterGrid.className = "toolbar-grid";
 
@@ -1131,6 +1368,7 @@ function getReportGames() {
       const hasSection = getPlayers(game).some(
         (player) => player.section === section
       );
+
       if (!hasSection) return false;
     }
 
@@ -1141,12 +1379,14 @@ function getReportGames() {
 function updateReportFilters() {
   const sectionSelect = $("reportSectionFilter");
   const topicSelect = $("reportTopicFilter");
+
   if (!sectionSelect || !topicSelect) return;
 
   const previousSection = sectionSelect.value;
   const previousTopic = topicSelect.value;
 
   const selectedGrade = $("reportGradeFilter").value;
+
   const relevantGames = historyGames.filter((game) =>
     !selectedGrade || String(game.grade || "") === selectedGrade
   );
@@ -1166,6 +1406,7 @@ function updateReportFilters() {
   )].sort((a, b) => a.localeCompare(b));
 
   sectionSelect.replaceChildren();
+
   const allSections = document.createElement("option");
   allSections.value = "";
   allSections.textContent = "All sections";
@@ -1179,6 +1420,7 @@ function updateReportFilters() {
   });
 
   topicSelect.replaceChildren();
+
   const allTopics = document.createElement("option");
   allTopics.value = "";
   allTopics.textContent = "All topics";
@@ -1194,6 +1436,7 @@ function updateReportFilters() {
   if (sections.includes(previousSection)) {
     sectionSelect.value = previousSection;
   }
+
   if (topics.includes(previousTopic)) {
     topicSelect.value = previousTopic;
   }
@@ -1202,10 +1445,12 @@ function updateReportFilters() {
 function createReportMetric(label, value) {
   const card = document.createElement("div");
   card.className = "card";
+
   card.append(
     createTextElement("p", "muted", label),
     createTextElement("h2", "", value)
   );
+
   return card;
 }
 
@@ -1221,50 +1466,52 @@ function renderPerformanceReports() {
   results.replaceChildren();
 
   const students = new Map();
+
   let totalScore = 0;
   let totalCorrect = 0;
   let totalAnswered = 0;
-  let totalQuestions = 0;
   let participantEntries = 0;
 
   games.forEach((game) => {
-    totalQuestions += Number(game.questionCount) || 0;
-
     getPlayers(game)
       .filter((player) =>
         !$("reportSectionFilter").value ||
         player.section === $("reportSectionFilter").value
       )
       .forEach((player) => {
-      participantEntries++;
-      totalScore += player.score;
-      totalCorrect += player.correct;
-      totalAnswered += player.answered;
+        participantEntries++;
+        totalScore += player.score;
+        totalCorrect += player.correct;
+        totalAnswered += player.answered;
 
-      const key = player.uid || (player.name + "|" + player.section);
-      if (!students.has(key)) {
-        students.set(key, {
-          name: player.name,
-          section: player.section,
-          games: 0,
-          score: 0,
-          correct: 0,
-          answered: 0
-        });
-      }
+        const key = player.uid || (player.name + "|" + player.section);
 
-      const student = students.get(key);
-      student.games++;
-      student.score += player.score;
-      student.correct += player.correct;
-      student.answered += player.answered;
-    });
+        if (!students.has(key)) {
+          students.set(key, {
+            name: player.name,
+            section: player.section,
+            games: 0,
+            score: 0,
+            correct: 0,
+            answered: 0
+          });
+        }
+
+        const student = students.get(key);
+
+        student.games++;
+        student.score += player.score;
+        student.correct += player.correct;
+        student.answered += player.answered;
+      });
   });
 
   const uniqueStudents = students.size;
+
   const averageScore = participantEntries
     ? Math.round(totalScore / participantEntries)
     : 0;
+
   const accuracy = totalAnswered
     ? Math.round((totalCorrect / totalAnswered) * 100)
     : 0;
@@ -1288,6 +1535,7 @@ function renderPerformanceReports() {
         "No participant results match these filters yet."
       )
     );
+
     return;
   }
 
@@ -1312,6 +1560,7 @@ function renderPerformanceReports() {
 
   const thead = document.createElement("thead");
   const headerRow = document.createElement("tr");
+
   [
     "Rank",
     "Student",
@@ -1322,11 +1571,14 @@ function renderPerformanceReports() {
   ].forEach((label) => {
     headerRow.appendChild(createTextElement("th", "", label));
   });
+
   thead.appendChild(headerRow);
 
   const tbody = document.createElement("tbody");
+
   ranked.forEach((student, index) => {
     const row = document.createElement("tr");
+
     [
       "#" + (index + 1),
       student.name,
@@ -1337,6 +1589,7 @@ function renderPerformanceReports() {
     ].forEach((value) => {
       row.appendChild(createTextElement("td", "", value));
     });
+
     tbody.appendChild(row);
   });
 
