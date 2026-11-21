@@ -1,10 +1,8 @@
 
 /* ------------------------------------------------------------
-   js/game-host.js — Phase 7
-   Teacher:
-   - Create and manage classroom games
+   js/game-host.js — Phase 7 FIXED
    - Synchronized and Individual progression
-   - Individual randomized question order
+   - Randomized question order per student
    - Automatic progression after answer or timeout
    - Manual reveal and next-question controls
    - Pause, resume, and end game
@@ -18,14 +16,7 @@ import {
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 
 import {
-  ref,
-  get,
-  set,
-  update,
-  onValue,
-  push,
-  remove,
-  runTransaction
+  ref, get, set, update, onValue, push, remove, runTransaction
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 
 const $ = (id) => document.getElementById(id);
@@ -71,7 +62,6 @@ if (section) {
               <option value="12">Grade 12</option>
             </select>
           </label>
-
           <label>Grammar topic
             <select id="gameTopic" required disabled>
               <option value="">Select a grade first</option>
@@ -81,13 +71,10 @@ if (section) {
 
         <div class="form-row">
           <label>Number of questions
-            <input id="gameQuestionCount" type="number"
-              min="1" max="50" value="10" required>
+            <input id="gameQuestionCount" type="number" min="1" max="50" value="10" required>
           </label>
-
           <label>Time per question (seconds)
-            <input id="gameTimer" type="number"
-              min="5" max="120" value="20" required>
+            <input id="gameTimer" type="number" min="5" max="120" value="20" required>
           </label>
         </div>
 
@@ -106,18 +93,12 @@ if (section) {
         </label>
 
         <p class="muted">
-          Synchronized: everyone answers the same question at the same time.
-          Individual: each student gets a randomized question order and advances independently.
+          Synchronized: everyone answers together.
+          Individual: each student receives a randomized question order.
         </p>
 
-        <p id="gameQuestionInfo" class="muted">
-          Select a grade and topic to see available questions.
-        </p>
-
-        <button id="createGameBtn" class="btn" type="submit">
-          Create Game
-        </button>
-
+        <p id="gameQuestionInfo" class="muted">Select a grade and topic.</p>
+        <button id="createGameBtn" class="btn" type="submit">Create Game</button>
         <p id="gameFormMessage" class="status" role="status"></p>
       </form>
     </div>
@@ -146,20 +127,15 @@ if (section) {
       </div>
 
       <hr>
-
       <h2>Waiting lobby</h2>
       <p class="muted">Students who join will appear here.</p>
       <p><strong id="playerCount">0 students joined</strong></p>
       <div id="playerList" class="list"></div>
-
       <hr>
 
       <div id="gameControlPanel" class="hidden">
         <h2>Game controls</h2>
-
-        <p id="gameControlMessage" class="status" role="status">
-          Waiting for you to start the game.
-        </p>
+        <p id="gameControlMessage" class="status" role="status">Waiting for you to start the game.</p>
 
         <div class="actions">
           <button id="startGameBtn" class="btn" type="button">Start Game</button>
@@ -210,65 +186,51 @@ if (section) {
   function availableQuestions() {
     const grade = Number($("gameGrade").value);
     const topic = $("gameTopic").value;
-
-    return questions.filter((q) =>
-      q.grade === grade && q.topic === topic
-    );
+    return questions.filter(q => q.grade === grade && q.topic === topic);
   }
 
   function updateQuestionInfo() {
     const grade = $("gameGrade").value;
     const topic = $("gameTopic").value;
-    const matches = availableQuestions();
+    const count = availableQuestions().length;
 
-    $("gameQuestionInfo").textContent =
-      grade && topic
-        ? matches.length + " question(s) available for this selection."
-        : "Select a grade and topic to see available questions.";
+    $("gameQuestionInfo").textContent = grade && topic
+      ? count + " question(s) available for this selection."
+      : "Select a grade and topic to see available questions.";
   }
 
   function updateTopics() {
     const grade = Number($("gameGrade").value);
-    const topicSelect = $("gameTopic");
-
-    topicSelect.replaceChildren();
+    const select = $("gameTopic");
+    select.replaceChildren();
 
     const first = document.createElement("option");
     first.value = "";
     first.textContent = "Select a topic";
-    topicSelect.appendChild(first);
+    select.appendChild(first);
 
     const topics = [...new Set(
-      questions
-        .filter((q) => q.grade === grade)
-        .map((q) => q.topic)
-        .filter(Boolean)
+      questions.filter(q => q.grade === grade).map(q => q.topic).filter(Boolean)
     )].sort((a, b) => a.localeCompare(b));
 
-    topics.forEach((topic) => {
+    topics.forEach(topic => {
       const option = document.createElement("option");
       option.value = topic;
       option.textContent = topic;
-      topicSelect.appendChild(option);
+      select.appendChild(option);
     });
 
-    topicSelect.disabled = topics.length === 0;
-
-    if (!topics.length && grade) {
-      first.textContent = "No topics available for this grade";
-    }
-
+    select.disabled = !topics.length;
+    if (!topics.length && grade) first.textContent = "No topics available";
     updateQuestionInfo();
   }
 
   function shuffle(items) {
     const result = [...items];
-
     for (let i = result.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [result[i], result[j]] = [result[j], result[i]];
     }
-
     return result;
   }
 
@@ -281,12 +243,10 @@ if (section) {
   function renderPlayers(players) {
     const list = $("playerList");
     list.replaceChildren();
-
     const entries = Object.entries(players || {});
 
     $("playerCount").textContent =
-      entries.length +
-      (entries.length === 1 ? " student joined" : " students joined");
+      entries.length + (entries.length === 1 ? " student joined" : " students joined");
 
     if (!entries.length) {
       const empty = document.createElement("p");
@@ -301,7 +261,7 @@ if (section) {
       row.className = "list-row";
 
       const name = document.createElement("strong");
-      name.textContent = (index + 1) + ". " + (player.name || "Student");
+      name.textContent = `${index + 1}. ${player.name || "Student"}`;
 
       const details = document.createElement("span");
       details.className = "muted";
@@ -318,9 +278,7 @@ if (section) {
 
     const entries = Object.entries(scores || {})
       .map(([uid, score]) => ({ uid, ...score }))
-      .sort((a, b) =>
-        (Number(a.rank) || 999) - (Number(b.rank) || 999)
-      );
+      .sort((a, b) => (Number(a.rank) || 999) - (Number(b.rank) || 999));
 
     if (!entries.length) {
       const empty = document.createElement("p");
@@ -330,17 +288,17 @@ if (section) {
       return;
     }
 
-    entries.forEach((student) => {
+    entries.forEach(student => {
       const row = document.createElement("div");
       row.className = "list-row";
 
       const name = document.createElement("strong");
-      name.textContent = "#" + (student.rank || "-") + " " + student.name;
+      name.textContent = `#${student.rank || "-"} ${student.name || "Student"}`;
 
       const details = document.createElement("span");
       details.className = "muted";
       details.textContent =
-        student.score + " points • " + student.correct + " correct";
+        `${Number(student.score) || 0} points • ${Number(student.correct) || 0} correct`;
 
       row.append(name, details);
       list.appendChild(row);
@@ -349,12 +307,11 @@ if (section) {
 
   function listenToPlayers(gameId) {
     if (stopPlayersListener) stopPlayersListener();
-
     stopPlayersListener = onValue(
       ref(db, "gamePlayers/" + gameId),
-      (snapshot) => renderPlayers(snapshot.val() || {}),
-      (error) => {
-        console.error("Lobby listener error:", error);
+      snap => renderPlayers(snap.val() || {}),
+      error => {
+        console.error(error);
         showLoadMessage("Could not load the student lobby. Check Firebase rules.", true);
       }
     );
@@ -362,12 +319,11 @@ if (section) {
 
   function listenToScores(gameId) {
     if (stopScoresListener) stopScoresListener();
-
     stopScoresListener = onValue(
       ref(db, "gameScores/" + gameId),
-      (snapshot) => renderLeaderboard(snapshot.val() || {}),
-      (error) => {
-        console.error("Leaderboard listener error:", error);
+      snap => renderLeaderboard(snap.val() || {}),
+      error => {
+        console.error(error);
         controlMessage("Could not load the leaderboard.", true);
       }
     );
@@ -375,51 +331,41 @@ if (section) {
 
   function listenToStudentStates(gameId) {
     if (stopStudentStatesListener) stopStudentStatesListener();
-
     stopStudentStatesListener = onValue(
       ref(db, "gameStudentState/" + gameId),
-      (snapshot) => {
+      snap => {
         if (progressionMode !== "individual") return;
-
-        const states = snapshot.val() || {};
-        const active = Object.values(states).filter((s) => s && !s.finished);
-
-        if (active.length) {
-          const completed = Object.values(states).filter((s) => s && s.finished).length;
-          controlMessage(
-            "Individual progress: " + completed + " finished • " +
-            active.length + " still playing."
-          );
+        const states = Object.values(snap.val() || {});
+        const completed = states.filter(s => s && s.finished).length;
+        const active = states.filter(s => s && !s.finished).length;
+        if (states.length) {
+          controlMessage(`Individual progress: ${completed} finished • ${active} still playing.`);
         }
       },
-      (error) => {
-        console.error("Student state listener error:", error);
-      }
+      error => console.error("Student state listener:", error)
     );
   }
 
   function listenToAnswers(gameId) {
     if (stopAnswersListener) stopAnswersListener();
-
     stopAnswersListener = onValue(
       ref(db, "gameAnswers/" + gameId),
-      (snapshot) => {
+      snap => {
         if (progressionMode !== "individual") return;
+        const allAnswers = snap.val() || {};
 
-        const answers = snapshot.val() || {};
-
-        for (const [uid, studentAnswers] of Object.entries(answers)) {
+        for (const [uid, studentAnswers] of Object.entries(allAnswers)) {
           for (const [key, answer] of Object.entries(studentAnswers || {})) {
+            if (!answer) continue;
             const answerId = uid + "_" + key;
-
-            if (!answer || processingAnswers.has(answerId)) continue;
-
-            processIndividualAnswer(uid, key, answer, answerId);
+            if (!processingAnswers.has(answerId)) {
+              processIndividualAnswer(uid, key, answer, answerId);
+            }
           }
         }
       },
-      (error) => {
-        console.error("Individual answer listener error:", error);
+      error => {
+        console.error(error);
         controlMessage("Could not monitor individual answers.", true);
       }
     );
@@ -428,9 +374,8 @@ if (section) {
   async function reservePin(gameId, pin) {
     const result = await runTransaction(
       ref(db, "gamePins/" + pin),
-      (current) => {
+      current => {
         if (current !== null) return;
-
         return {
           gameId,
           ownerUid: teacherUid,
@@ -440,7 +385,6 @@ if (section) {
       },
       { applyLocally: false }
     );
-
     return result.committed;
   }
 
@@ -460,17 +404,15 @@ if (section) {
   function renderQuestionPreview(question, index) {
     $("teacherQuestionPreview").classList.remove("hidden");
     $("teacherQuestionNumber").textContent =
-      "Question " + (index + 1) + " of " + currentGameQuestions.length;
-
+      `Question ${index + 1} of ${currentGameQuestions.length}`;
     $("teacherQuestionText").textContent = question.text;
 
     const choices = $("teacherQuestionChoices");
     choices.replaceChildren();
 
-    question.choices.forEach((choice, choiceIndex) => {
+    question.choices.forEach((choice, i) => {
       const row = document.createElement("p");
-      row.textContent =
-        String.fromCharCode(65 + choiceIndex) + ". " + choice;
+      row.textContent = `${String.fromCharCode(65 + i)}. ${choice}`;
       choices.appendChild(row);
     });
 
@@ -480,12 +422,8 @@ if (section) {
 
   function updateControlButtons(status, revealed) {
     [
-      "startGameBtn",
-      "pauseGameBtn",
-      "resumeGameBtn",
-      "revealAnswerBtn",
-      "nextQuestionBtn",
-      "endGameBtn"
+      "startGameBtn", "pauseGameBtn", "resumeGameBtn",
+      "revealAnswerBtn", "nextQuestionBtn", "endGameBtn"
     ].forEach(hideButton);
 
     if (status === "waiting") {
@@ -493,7 +431,6 @@ if (section) {
     } else if (status === "active") {
       showButton("pauseGameBtn");
       showButton("endGameBtn");
-
       if (revealed) {
         hideButton("pauseGameBtn");
         showButton("nextQuestionBtn");
@@ -503,17 +440,14 @@ if (section) {
     } else if (status === "paused") {
       showButton("resumeGameBtn");
       showButton("endGameBtn");
-
       if (revealed) showButton("nextQuestionBtn");
       else showButton("revealAnswerBtn");
     }
   }
 
   function stopIndividualTimer() {
-    if (individualTimer) {
-      clearInterval(individualTimer);
-      individualTimer = null;
-    }
+    if (individualTimer) clearInterval(individualTimer);
+    individualTimer = null;
   }
 
   function clearAdvanceTimer(uid) {
@@ -525,21 +459,18 @@ if (section) {
 
   function getStudentQuestion(uid, position, orders) {
     const order = orders?.[uid];
-
     if (!Array.isArray(order)) return null;
-
     const questionIndex = order[position];
-
     if (!Number.isInteger(questionIndex)) return null;
-
     return currentGameQuestions[questionIndex] || null;
   }
 
   async function publishIndividualQuestion(uid, position, order) {
     const question = getStudentQuestion(uid, position, { [uid]: order });
+    const stateRef = ref(db, `gameStudentState/${currentGameId}/${uid}`);
 
     if (!question) {
-      await set(ref(db, "gameStudentState/" + currentGameId + "/" + uid), {
+      await set(stateRef, {
         currentQuestionIndex: Math.max(0, position),
         currentQuestion: {
           text: "You have completed the game.",
@@ -548,15 +479,14 @@ if (section) {
         questionStartedAt: Date.now(),
         answerDeadline: Date.now(),
         answerRevealed: true,
-        finished: true
+        finished: true,
+        status: "completed"
       });
-
       return;
     }
 
     const now = Date.now();
-
-    await set(ref(db, "gameStudentState/" + currentGameId + "/" + uid), {
+    await set(stateRef, {
       currentQuestionIndex: position,
       currentQuestion: {
         text: question.text,
@@ -564,35 +494,32 @@ if (section) {
       },
       questionStartedAt: now,
       answerDeadline: now + Number($("gameTimer").value) * 1000,
-      answerRevealed: false
+      answerRevealed: false,
+      revealedCorrectIndex: null,
+      revealedExplanation: "",
+      pausedRemaining: null,
+      finished: false,
+      status: "active"
     });
   }
 
   async function startIndividualGame() {
-    const playersSnapshot = await get(
-      ref(db, "gamePlayers/" + currentGameId)
-    );
+    const playersSnap = await get(ref(db, "gamePlayers/" + currentGameId));
+    const players = playersSnap.val() || {};
+    const entries = Object.entries(players);
 
-    const players = playersSnapshot.val() || {};
-    const playerEntries = Object.entries(players);
-
-    if (!playerEntries.length) {
-      throw new Error("No students have joined the lobby yet.");
-    }
+    if (!entries.length) throw new Error("No students have joined the lobby yet.");
 
     const orders = {};
-
-    for (const [uid] of playerEntries) {
-      orders[uid] = shuffle(
-        currentGameQuestions.map((q, index) => index)
-      );
+    for (const [uid] of entries) {
+      orders[uid] = shuffle(currentGameQuestions.map((q, i) => i));
     }
 
     await update(ref(db, "gamePrivate/" + currentGameId), {
       studentOrders: orders
     });
 
-    for (const [uid] of playerEntries) {
+    for (const [uid] of entries) {
       await publishIndividualQuestion(uid, 0, orders[uid]);
     }
 
@@ -604,40 +531,24 @@ if (section) {
 
     listenToAnswers(currentGameId);
     listenToStudentStates(currentGameId);
-
     startIndividualTimer();
 
     renderQuestionPreview(currentGameQuestions[0], 0);
     updateControlButtons("active", false);
-
-    controlMessage(
-      "Individual mode started. Each student has a separate randomized question order."
-    );
-  }
-
-  async function startSynchronizedGame() {
-    await showQuestion(0);
+    controlMessage("Individual mode started. Students have separate randomized question orders.");
   }
 
   async function showQuestion(index) {
     const question = currentGameQuestions[index];
-
-    if (!question) {
-      throw new Error("The requested question could not be found.");
-    }
+    if (!question) throw new Error("The requested question could not be found.");
 
     const now = Date.now();
-    const deadline = now + Number($("gameTimer").value) * 1000;
-
     await update(ref(db, "games/" + currentGameId), {
       status: "active",
       currentQuestionIndex: index,
-      currentQuestion: {
-        text: question.text,
-        choices: question.choices
-      },
+      currentQuestion: { text: question.text, choices: question.choices },
       questionStartedAt: now,
-      answerDeadline: deadline,
+      answerDeadline: now + Number($("gameTimer").value) * 1000,
       answerRevealed: false,
       revealedCorrectIndex: null,
       revealedExplanation: null,
@@ -645,14 +556,9 @@ if (section) {
     });
 
     currentQuestionIndex = index;
-
     renderQuestionPreview(question, index);
     updateControlButtons("active", false);
-
-    controlMessage(
-      "Question " + (index + 1) +
-      " is now live. Students can submit their answers."
-    );
+    controlMessage(`Question ${index + 1} is now live.`);
   }
 
   async function startGame() {
@@ -662,85 +568,76 @@ if (section) {
       $("startGameBtn").disabled = true;
       controlMessage("Preparing the game...");
 
-      const privateSnapshot = await get(
-        ref(db, "gamePrivate/" + currentGameId)
-      );
+      const snap = await get(ref(db, "gamePrivate/" + currentGameId));
+      if (!snap.exists()) throw new Error("Private questions could not be found.");
 
-      if (!privateSnapshot.exists()) {
-        throw new Error("Private questions could not be found.");
-      }
+      const data = snap.val();
+      if (data.ownerUid !== teacherUid) throw new Error("You are not the owner of this game.");
 
-      const privateData = privateSnapshot.val();
-
-      if (privateData.ownerUid !== teacherUid) {
-        throw new Error("You are not the owner of this game.");
-      }
-
-      currentGameQuestions = Object.values(privateData.questions || {});
-
-      if (!currentGameQuestions.length) {
-        throw new Error("This game has no questions.");
-      }
+      currentGameQuestions = Object.values(data.questions || {});
+      if (!currentGameQuestions.length) throw new Error("This game has no questions.");
 
       if (progressionMode === "individual") {
         await startIndividualGame();
       } else {
-        await startSynchronizedGame();
+        await showQuestion(0);
       }
-
     } catch (error) {
-      console.error("Start game error:", error);
+      console.error(error);
       controlMessage(error.message || "Could not start the game.", true);
     } finally {
       $("startGameBtn").disabled = false;
     }
   }
 
+  async function refreshRanks() {
+    const snap = await get(ref(db, "gameScores/" + currentGameId));
+    const scores = snap.val() || {};
+    const ranked = Object.entries(scores).sort(
+      (a, b) => (Number(b[1].score) || 0) - (Number(a[1].score) || 0)
+    );
+
+    const updates = {};
+    ranked.forEach(([uid], index) => {
+      updates[uid + "/rank"] = index + 1;
+    });
+
+    if (Object.keys(updates).length) {
+      await update(ref(db, "gameScores/" + currentGameId), updates);
+    }
+  }
+
   async function updateIndividualScores(uid, answer, question, deadline) {
-    const playerSnapshot = await get(
-      ref(db, "gamePlayers/" + currentGameId + "/" + uid)
-    );
+    const [playerSnap, scoreSnap] = await Promise.all([
+      get(ref(db, `gamePlayers/${currentGameId}/${uid}`)),
+      get(ref(db, `gameScores/${currentGameId}/${uid}`))
+    ]);
 
-    const scoreSnapshot = await get(
-      ref(db, "gameScores/" + currentGameId + "/" + uid)
-    );
-
-    const player = playerSnapshot.val();
-
+    const player = playerSnap.val();
     if (!player) return;
 
-    const previous = scoreSnapshot.val() || {};
-
+    const previous = scoreSnap.val() || {};
     let points = 0;
     let correct = 0;
     let answered = 0;
 
     if (answer) {
       answered = 1;
+      const submittedAt = Number(answer.submittedAt) || 0;
+      const onTime = submittedAt > 0 && submittedAt <= deadline;
 
-      const onTime =
-        Number(answer.submittedAt) > 0 &&
-        Number(answer.submittedAt) <= deadline;
-
-      if (
-        onTime &&
-        Number(answer.choiceIndex) === Number(question.correctIndex)
-      ) {
+      if (onTime && Number(answer.choiceIndex) === Number(question.correctIndex)) {
         correct = 1;
         points = 100;
 
         if ($("gameMode").value === "speed") {
-          const secondsRemaining = Math.max(
-            0,
-            Math.floor((deadline - Number(answer.submittedAt)) / 1000)
-          );
-
-          points += Math.min(100, secondsRemaining * 5);
+          const seconds = Math.max(0, Math.floor((deadline - submittedAt) / 1000));
+          points += Math.min(100, seconds * 5);
         }
       }
     }
 
-    await set(ref(db, "gameScores/" + currentGameId + "/" + uid), {
+    await set(ref(db, `gameScores/${currentGameId}/${uid}`), {
       name: player.name,
       section: player.section,
       score: (Number(previous.score) || 0) + points,
@@ -751,40 +648,37 @@ if (section) {
     await refreshRanks();
   }
 
-  async function refreshRanks() {
-    const snapshot = await get(ref(db, "gameScores/" + currentGameId));
-    const scores = snapshot.val() || {};
+  async function revealIndividualStudent(uid, state, answer) {
+    const privateSnap = await get(ref(db, "gamePrivate/" + currentGameId));
+    const privateData = privateSnap.val() || {};
+    const order = privateData.studentOrders?.[uid];
+    const position = Number(state.currentQuestionIndex);
+    const question = getStudentQuestion(uid, position, { [uid]: order });
 
-    const ranked = Object.entries(scores).sort(
-      (a, b) => (Number(b[1].score) || 0) - (Number(a[1].score) || 0)
-    );
+    if (!question) return;
 
-    const updates = {};
+    const deadline = Number(state.answerDeadline) || 0;
+    await updateIndividualScores(uid, answer, question, deadline);
 
-    ranked.forEach(([uid], index) => {
-      updates[uid + "/rank"] = index + 1;
+    await update(ref(db, `gameStudentState/${currentGameId}/${uid}`), {
+      answerRevealed: true,
+      revealedCorrectIndex: Number(question.correctIndex),
+      revealedExplanation: question.explanation || ""
     });
-
-    if (Object.keys(updates).length) {
-      await update(ref(db, "gameScores/" + currentGameId), updates);
-    }
   }
 
   async function processIndividualAnswer(uid, key, answer, answerId) {
     if (processingAnswers.has(answerId)) return;
-
     processingAnswers.add(answerId);
 
     try {
-      const [privateSnapshot, stateSnapshot, gameSnapshot] = await Promise.all([
-        get(ref(db, "gamePrivate/" + currentGameId)),
-        get(ref(db, "gameStudentState/" + currentGameId + "/" + uid)),
+      const [stateSnap, gameSnap] = await Promise.all([
+        get(ref(db, `gameStudentState/${currentGameId}/${uid}`)),
         get(ref(db, "games/" + currentGameId))
       ]);
 
-      const privateData = privateSnapshot.val() || {};
-      const state = stateSnapshot.val();
-      const game = gameSnapshot.val();
+      const state = stateSnap.val();
+      const game = gameSnap.val();
 
       if (!state || !game || game.status !== "active" || state.finished) return;
       if (state.answerRevealed === true) return;
@@ -793,52 +687,29 @@ if (section) {
       if (key !== "q" + position) return;
       if (Number(answer.questionIndex) !== position) return;
 
+      const privateSnap = await get(ref(db, "gamePrivate/" + currentGameId));
+      const privateData = privateSnap.val() || {};
       const order = privateData.studentOrders?.[uid];
-
-      if (!Array.isArray(order)) return;
-
-      const question = getStudentQuestion(uid, position, {
-        [uid]: order
-      });
+      const question = getStudentQuestion(uid, position, { [uid]: order });
 
       if (!question) return;
 
       const deadline = Number(state.answerDeadline) || 0;
-
-      if (
-        !answer.submittedAt ||
-        Number(answer.submittedAt) > deadline
-      ) {
+      if (!answer.submittedAt || Number(answer.submittedAt) > deadline) {
+        // Late answers are ignored for points, but timeout progression handles them.
         return;
       }
 
-      await updateIndividualScores(uid, answer, question, deadline);
-
-      await update(
-        ref(db, "gameStudentState/" + currentGameId + "/" + uid),
-        {
-          answerRevealed: true,
-          revealedCorrectIndex: Number(question.correctIndex),
-          revealedExplanation: question.explanation || ""
-        }
-      );
-
-      controlMessage(
-        "A student submitted an answer. Individual score updated."
-      );
+      await revealIndividualStudent(uid, state, answer);
+      controlMessage("A student submitted an answer. Individual score updated.");
 
       clearAdvanceTimer(uid);
-
-      individualAdvanceTimers[uid] = setTimeout(async () => {
-        try {
-          await advanceIndividualStudent(uid);
-        } catch (error) {
-          console.error("Automatic student progression error:", error);
-        }
+      individualAdvanceTimers[uid] = setTimeout(() => {
+        advanceIndividualStudent(uid).catch(error => console.error(error));
       }, 3000);
 
     } catch (error) {
-      console.error("Process individual answer error:", error);
+      console.error("Process individual answer:", error);
       controlMessage("Could not process an individual answer.", true);
     }
   }
@@ -846,68 +717,75 @@ if (section) {
   async function advanceIndividualStudent(uid) {
     clearAdvanceTimer(uid);
 
-    const [stateSnapshot, privateSnapshot, gameSnapshot] = await Promise.all([
-      get(ref(db, "gameStudentState/" + currentGameId + "/" + uid)),
+    const [stateSnap, privateSnap, gameSnap] = await Promise.all([
+      get(ref(db, `gameStudentState/${currentGameId}/${uid}`)),
       get(ref(db, "gamePrivate/" + currentGameId)),
       get(ref(db, "games/" + currentGameId))
     ]);
 
-    const state = stateSnapshot.val();
-    const privateData = privateSnapshot.val() || {};
-    const game = gameSnapshot.val();
+    const state = stateSnap.val();
+    const privateData = privateSnap.val() || {};
+    const game = gameSnap.val();
 
     if (!state || !game || game.status !== "active" || state.finished) return;
+    if (state.answerRevealed !== true) return;
 
     const order = privateData.studentOrders?.[uid];
-
     if (!Array.isArray(order)) return;
 
-    const nextPosition = Number(state.currentQuestionIndex) + 1;
-
-    await publishIndividualQuestion(uid, nextPosition, order);
+    await publishIndividualQuestion(
+      uid,
+      Number(state.currentQuestionIndex) + 1,
+      order
+    );
   }
 
   async function timeoutIndividualStudent(uid, state, order) {
-    const timeoutId = uid + "_q" + state.currentQuestionIndex;
+    const position = Number(state.currentQuestionIndex);
+    const timeoutId = uid + "_q" + position;
 
     if (processedTimeouts.has(timeoutId)) return;
-    processedTimeouts.add(timeoutId);
 
     try {
-      const position = Number(state.currentQuestionIndex);
-      const question = getStudentQuestion(uid, position, { [uid]: order });
+      const [answerSnap, latestStateSnap, gameSnap] = await Promise.all([
+        get(ref(db, `gameAnswers/${currentGameId}/${uid}/q${position}`)),
+        get(ref(db, `gameStudentState/${currentGameId}/${uid}`)),
+        get(ref(db, "games/" + currentGameId))
+      ]);
 
+      const latestState = latestStateSnap.val();
+      const game = gameSnap.val();
+
+      if (!latestState || !game || game.status !== "active") return;
+      if (latestState.finished || latestState.answerRevealed) return;
+      if (Number(latestState.currentQuestionIndex) !== position) return;
+
+      const deadline = Number(latestState.answerDeadline) || 0;
+      if (Date.now() < deadline) return;
+
+      processedTimeouts.add(timeoutId);
+
+      const question = getStudentQuestion(uid, position, { [uid]: order });
       if (!question) return;
 
-      const answerSnapshot = await get(
-        ref(db, "gameAnswers/" + currentGameId + "/" + uid + "/q" + position)
-      );
+      const answer = answerSnap.val();
+      // Late answers count as attempted but earn no points.
+      await updateIndividualScores(uid, answer, question, deadline);
 
-      if (answerSnapshot.exists()) return;
-
-      await updateIndividualScores(uid, null, question, Number(state.answerDeadline));
-
-      await update(
-        ref(db, "gameStudentState/" + currentGameId + "/" + uid),
-        {
-          answerRevealed: true,
-          revealedCorrectIndex: Number(question.correctIndex),
-          revealedExplanation: question.explanation || ""
-        }
-      );
+      await update(ref(db, `gameStudentState/${currentGameId}/${uid}`), {
+        answerRevealed: true,
+        revealedCorrectIndex: Number(question.correctIndex),
+        revealedExplanation: question.explanation || ""
+      });
 
       clearAdvanceTimer(uid);
-
-      individualAdvanceTimers[uid] = setTimeout(async () => {
-        try {
-          await advanceIndividualStudent(uid);
-        } catch (error) {
-          console.error("Timeout progression error:", error);
-        }
+      individualAdvanceTimers[uid] = setTimeout(() => {
+        advanceIndividualStudent(uid).catch(error => console.error(error));
       }, 3000);
 
     } catch (error) {
-      console.error("Individual timeout error:", error);
+      processedTimeouts.delete(timeoutId);
+      console.error("Individual timeout:", error);
     }
   }
 
@@ -916,119 +794,88 @@ if (section) {
 
     individualTimer = setInterval(async () => {
       try {
-        const [statesSnapshot, privateSnapshot, gameSnapshot] = await Promise.all([
+        const [statesSnap, privateSnap, gameSnap] = await Promise.all([
           get(ref(db, "gameStudentState/" + currentGameId)),
           get(ref(db, "gamePrivate/" + currentGameId)),
           get(ref(db, "games/" + currentGameId))
         ]);
 
-        const game = gameSnapshot.val();
-
+        const game = gameSnap.val();
         if (!game || game.status !== "active") return;
 
-        const states = statesSnapshot.val() || {};
-        const orders = privateSnapshot.val()?.studentOrders || {};
+        const states = statesSnap.val() || {};
+        const orders = privateSnap.val()?.studentOrders || {};
 
         for (const [uid, state] of Object.entries(states)) {
           if (!state || state.finished || state.answerRevealed) continue;
-
           if (Date.now() >= Number(state.answerDeadline)) {
             await timeoutIndividualStudent(uid, state, orders[uid]);
           }
         }
       } catch (error) {
-        console.error("Individual timer error:", error);
+        console.error("Individual timer:", error);
       }
     }, 1000);
   }
 
   async function revealIndividualAnswers() {
-    const [statesSnapshot, privateSnapshot, answersSnapshot] = await Promise.all([
+    const [statesSnap, answersSnap] = await Promise.all([
       get(ref(db, "gameStudentState/" + currentGameId)),
-      get(ref(db, "gamePrivate/" + currentGameId)),
       get(ref(db, "gameAnswers/" + currentGameId))
     ]);
 
-    const states = statesSnapshot.val() || {};
-    const orders = privateSnapshot.val()?.studentOrders || {};
-    const answers = answersSnapshot.val() || {};
+    const states = statesSnap.val() || {};
+    const answers = answersSnap.val() || {};
 
     for (const [uid, state] of Object.entries(states)) {
       if (!state || state.finished || state.answerRevealed) continue;
 
       const position = Number(state.currentQuestionIndex);
-      const question = getStudentQuestion(uid, position, { [uid]: orders[uid] });
-
-      if (!question) continue;
-
       const answer = answers[uid]?.["q" + position] || null;
 
-      if (answer) {
-        await updateIndividualScores(uid, answer, question, Number(state.answerDeadline));
-      } else {
-        await updateIndividualScores(uid, null, question, Number(state.answerDeadline));
-      }
-
-      await update(
-        ref(db, "gameStudentState/" + currentGameId + "/" + uid),
-        {
-          answerRevealed: true,
-          revealedCorrectIndex: Number(question.correctIndex),
-          revealedExplanation: question.explanation || ""
-        }
-      );
+      await revealIndividualStudent(uid, state, answer);
 
       clearAdvanceTimer(uid);
       individualAdvanceTimers[uid] = setTimeout(() => {
-        advanceIndividualStudent(uid).catch(console.error);
+        advanceIndividualStudent(uid).catch(error => console.error(error));
       }, 3000);
     }
 
-    controlMessage("Answers revealed for students who are still on a question.");
+    controlMessage("Answers revealed for students who are still answering.");
   }
 
   async function pauseGame() {
     try {
-      const snapshot = await get(ref(db, "games/" + currentGameId));
-      const game = snapshot.val();
-
+      const gameSnap = await get(ref(db, "games/" + currentGameId));
+      const game = gameSnap.val();
       if (!game || game.status !== "active") return;
 
       if (progressionMode === "individual") {
         stopIndividualTimer();
 
-        const statesSnapshot = await get(
-          ref(db, "gameStudentState/" + currentGameId)
-        );
-
-        const states = statesSnapshot.val() || {};
+        const statesSnap = await get(ref(db, "gameStudentState/" + currentGameId));
+        const states = statesSnap.val() || {};
         const updates = {};
 
         for (const [uid, state] of Object.entries(states)) {
           if (!state || state.finished || state.answerRevealed) continue;
-
-          const remaining = Math.max(
+          updates[uid + "/pausedRemaining"] = Math.max(
             0,
             Math.ceil((Number(state.answerDeadline) - Date.now()) / 1000)
           );
-
-          updates[uid + "/pausedRemaining"] = remaining;
+          updates[uid + "/status"] = "paused";
         }
 
         if (Object.keys(updates).length) {
           await update(ref(db, "gameStudentState/" + currentGameId), updates);
         }
 
-        await update(ref(db, "games/" + currentGameId), {
-          status: "paused"
-        });
-
+        await update(ref(db, "games/" + currentGameId), { status: "paused" });
       } else {
         const remaining = Math.max(
           0,
           Math.ceil((Number(game.answerDeadline) - Date.now()) / 1000)
         );
-
         await update(ref(db, "games/" + currentGameId), {
           status: "paused",
           pausedRemaining: remaining
@@ -1037,49 +884,40 @@ if (section) {
 
       updateControlButtons("paused", false);
       controlMessage("Game paused.");
-
     } catch (error) {
-      console.error("Pause error:", error);
+      console.error(error);
       controlMessage(error.message || "Could not pause the game.", true);
     }
   }
 
   async function resumeGame() {
     try {
-      const snapshot = await get(ref(db, "games/" + currentGameId));
-      const game = snapshot.val();
-
+      const gameSnap = await get(ref(db, "games/" + currentGameId));
+      const game = gameSnap.val();
       if (!game || game.status !== "paused") return;
 
       if (progressionMode === "individual") {
-        const statesSnapshot = await get(
-          ref(db, "gameStudentState/" + currentGameId)
-        );
-
-        const states = statesSnapshot.val() || {};
+        const statesSnap = await get(ref(db, "gameStudentState/" + currentGameId));
+        const states = statesSnap.val() || {};
         const updates = {};
         const now = Date.now();
 
         for (const [uid, state] of Object.entries(states)) {
           if (!state || state.finished || state.answerRevealed) continue;
-
           const remaining = Math.max(0, Number(state.pausedRemaining) || 0);
 
           updates[uid + "/questionStartedAt"] = now;
           updates[uid + "/answerDeadline"] = now + remaining * 1000;
           updates[uid + "/pausedRemaining"] = null;
+          updates[uid + "/status"] = "active";
         }
 
         if (Object.keys(updates).length) {
           await update(ref(db, "gameStudentState/" + currentGameId), updates);
         }
 
-        await update(ref(db, "games/" + currentGameId), {
-          status: "active"
-        });
-
+        await update(ref(db, "games/" + currentGameId), { status: "active" });
         startIndividualTimer();
-
       } else {
         if (game.answerRevealed === true) {
           updateControlButtons("paused", true);
@@ -1099,34 +937,30 @@ if (section) {
 
       updateControlButtons("active", false);
       controlMessage("Game resumed.");
-
     } catch (error) {
-      console.error("Resume error:", error);
+      console.error(error);
       controlMessage(error.message || "Could not resume the game.", true);
     }
   }
 
   async function calculateScores(questionIndex, correctIndex) {
-    const [playersSnapshot, answersSnapshot, scoresSnapshot, gameSnapshot] =
-      await Promise.all([
-        get(ref(db, "gamePlayers/" + currentGameId)),
-        get(ref(db, "gameAnswers/" + currentGameId)),
-        get(ref(db, "gameScores/" + currentGameId)),
-        get(ref(db, "games/" + currentGameId))
-      ]);
+    const [playersSnap, answersSnap, scoresSnap, gameSnap] = await Promise.all([
+      get(ref(db, "gamePlayers/" + currentGameId)),
+      get(ref(db, "gameAnswers/" + currentGameId)),
+      get(ref(db, "gameScores/" + currentGameId)),
+      get(ref(db, "games/" + currentGameId))
+    ]);
 
-    const players = playersSnapshot.val() || {};
-    const answers = answersSnapshot.val() || {};
-    const previousScores = scoresSnapshot.val() || {};
-    const game = gameSnapshot.val() || {};
-
-    const answerDeadline = Number(game.answerDeadline) || 0;
+    const players = playersSnap.val() || {};
+    const answers = answersSnap.val() || {};
+    const previousScores = scoresSnap.val() || {};
+    const game = gameSnap.val() || {};
+    const deadline = Number(game.answerDeadline) || 0;
     const updatedScores = {};
 
     for (const [uid, player] of Object.entries(players)) {
       const previous = previousScores[uid] || {};
-      const answer =
-        answers[uid]?.["q" + questionIndex] ||
+      const answer = answers[uid]?.["q" + questionIndex] ||
         answers[uid]?.[String(questionIndex)];
 
       let points = 0;
@@ -1135,21 +969,16 @@ if (section) {
 
       if (answer) {
         answered = 1;
-
         const submittedAt = Number(answer.submittedAt) || 0;
-        const submittedOnTime =
-          submittedAt > 0 && answerDeadline > 0 && submittedAt <= answerDeadline;
+        const onTime = submittedAt > 0 && deadline > 0 && submittedAt <= deadline;
 
-        if (submittedOnTime && Number(answer.choiceIndex) === correctIndex) {
+        if (onTime && Number(answer.choiceIndex) === correctIndex) {
           correct = 1;
           points = 100;
 
           if (game.mode === "speed") {
-            const secondsRemaining = Math.max(
-              0,
-              Math.floor((answerDeadline - submittedAt) / 1000)
-            );
-            points += Math.min(100, secondsRemaining * 5);
+            const seconds = Math.max(0, Math.floor((deadline - submittedAt) / 1000));
+            points += Math.min(100, seconds * 5);
           }
         }
       }
@@ -1163,13 +992,8 @@ if (section) {
       };
     }
 
-    const ranked = Object.entries(updatedScores).sort(
-      (a, b) => b[1].score - a[1].score
-    );
-
-    ranked.forEach(([uid, score], index) => {
-      score.rank = index + 1;
-    });
+    const ranked = Object.entries(updatedScores).sort((a, b) => b[1].score - a[1].score);
+    ranked.forEach(([uid, score], index) => score.rank = index + 1);
 
     await set(ref(db, "gameScores/" + currentGameId), updatedScores);
   }
@@ -1182,23 +1006,15 @@ if (section) {
         return;
       }
 
-      const snapshot = await get(ref(db, "games/" + currentGameId));
-      const game = snapshot.val();
-
+      const snap = await get(ref(db, "games/" + currentGameId));
+      const game = snap.val();
       if (!game || game.answerRevealed === true) return;
 
       const question = currentGameQuestions[currentQuestionIndex];
-
-      if (!question) {
-        throw new Error("Current question is missing.");
-      }
+      if (!question) throw new Error("Current question is missing.");
 
       controlMessage("Checking answers and calculating scores...");
-
-      await calculateScores(
-        currentQuestionIndex,
-        Number(question.correctIndex)
-      );
+      await calculateScores(currentQuestionIndex, Number(question.correctIndex));
 
       await update(ref(db, "games/" + currentGameId), {
         answerRevealed: true,
@@ -1208,30 +1024,20 @@ if (section) {
 
       $("teacherCorrectAnswer").textContent =
         "Correct answer: " + question.choices[question.correctIndex];
-
       $("teacherCorrectAnswer").classList.remove("hidden");
       $("teacherExplanation").textContent = question.explanation || "";
 
       updateControlButtons(game.status, true);
       controlMessage("Answer revealed. Scores and leaderboard updated.");
-
     } catch (error) {
-      console.error("Reveal answer error:", error);
+      console.error(error);
       controlMessage(error.message || "Could not reveal the answer.", true);
     }
   }
 
   async function nextIndividualQuestion() {
-    const statesSnapshot = await get(
-      ref(db, "gameStudentState/" + currentGameId)
-    );
-
-    const privateSnapshot = await get(
-      ref(db, "gamePrivate/" + currentGameId)
-    );
-
-    const states = statesSnapshot.val() || {};
-    const orders = privateSnapshot.val()?.studentOrders || {};
+    const statesSnap = await get(ref(db, "gameStudentState/" + currentGameId));
+    const states = statesSnap.val() || {};
 
     for (const [uid, state] of Object.entries(states)) {
       if (!state || state.finished) continue;
@@ -1239,20 +1045,24 @@ if (section) {
       clearAdvanceTimer(uid);
 
       if (state.answerRevealed !== true) {
+        const privateSnap = await get(ref(db, "gamePrivate/" + currentGameId));
+        const privateData = privateSnap.val() || {};
+        const order = privateData.studentOrders?.[uid];
         const position = Number(state.currentQuestionIndex);
-        const question = getStudentQuestion(uid, position, { [uid]: orders[uid] });
+        const question = getStudentQuestion(uid, position, { [uid]: order });
 
         if (question) {
-          const answerSnapshot = await get(
-            ref(db, "gameAnswers/" + currentGameId + "/" + uid + "/q" + position)
+          const answerSnap = await get(
+            ref(db, `gameAnswers/${currentGameId}/${uid}/q${position}`)
           );
-
           await updateIndividualScores(
-            uid,
-            answerSnapshot.val(),
-            question,
-            Number(state.answerDeadline)
+            uid, answerSnap.val(), question, Number(state.answerDeadline)
           );
+          await update(ref(db, `gameStudentState/${currentGameId}/${uid}`), {
+            answerRevealed: true,
+            revealedCorrectIndex: Number(question.correctIndex),
+            revealedExplanation: question.explanation || ""
+          });
         }
       }
 
@@ -1276,9 +1086,8 @@ if (section) {
       }
 
       await showQuestion(currentQuestionIndex + 1);
-
     } catch (error) {
-      console.error("Next question error:", error);
+      console.error(error);
       controlMessage(error.message || "Could not load the next question.", true);
     }
   }
@@ -1288,33 +1097,26 @@ if (section) {
       throw new Error("Missing teacher or game information.");
     }
 
-    const historyRef = ref(
-      db,
-      "gameHistory/" + teacherUid + "/" + currentGameId
-    );
+    const historyRef = ref(db, `gameHistory/${teacherUid}/${currentGameId}`);
+    const existing = await get(historyRef);
+    if (existing.exists()) return false;
 
-    const existingHistory = await get(historyRef);
-
-    if (existingHistory.exists()) return false;
-
-    const [gameSnapshot, playersSnapshot, scoresSnapshot] = await Promise.all([
+    const [gameSnap, playersSnap, scoresSnap] = await Promise.all([
       get(ref(db, "games/" + currentGameId)),
       get(ref(db, "gamePlayers/" + currentGameId)),
       get(ref(db, "gameScores/" + currentGameId))
     ]);
 
-    const game = gameSnapshot.val();
-
+    const game = gameSnap.val();
     if (!game) throw new Error("The game record could not be found.");
     if (game.ownerUid !== teacherUid) throw new Error("You are not the owner of this game.");
 
-    const players = playersSnapshot.val() || {};
-    const scores = scoresSnapshot.val() || {};
+    const players = playersSnap.val() || {};
+    const scores = scoresSnap.val() || {};
     const historyPlayers = {};
 
     for (const [uid, player] of Object.entries(players)) {
       const score = scores[uid] || {};
-
       historyPlayers[uid] = {
         name: String(player.name || "Student"),
         section: String(player.section || ""),
@@ -1325,15 +1127,12 @@ if (section) {
       };
     }
 
-    const rankedPlayers = Object.entries(historyPlayers).sort(
+    const ranked = Object.entries(historyPlayers).sort(
       (a, b) => b[1].score - a[1].score
     );
+    ranked.forEach(([uid, player], index) => player.rank = index + 1);
 
-    rankedPlayers.forEach(([uid, player], index) => {
-      player.rank = index + 1;
-    });
-
-    const historyRecord = {
+    const record = {
       ownerUid: teacherUid,
       grade: Number(game.grade),
       topic: String(game.topic || ""),
@@ -1346,23 +1145,19 @@ if (section) {
       playerCount: Object.keys(players).length
     };
 
-    if (Object.keys(historyPlayers).length) {
-      historyRecord.players = historyPlayers;
-    }
-
-    await set(historyRef, historyRecord);
+    if (Object.keys(historyPlayers).length) record.players = historyPlayers;
+    await set(historyRef, record);
     return true;
   }
 
   async function endGame() {
     if (!currentGameId || gameBusy) return;
-
     gameBusy = true;
 
     try {
       const gameRef = ref(db, "games/" + currentGameId);
-      const gameSnapshot = await get(gameRef);
-      const game = gameSnapshot.val();
+      const snap = await get(gameRef);
+      const game = snap.val();
 
       if (!game) throw new Error("The game could not be found.");
       if (game.ownerUid !== teacherUid) throw new Error("You are not the owner of this game.");
@@ -1371,61 +1166,54 @@ if (section) {
         const confirmed = window.confirm(
           "Are you sure you want to end this game? The final results will be saved."
         );
-
         if (!confirmed) return;
-
         await update(gameRef, { status: "finished" });
       }
 
       stopIndividualTimer();
-
       Object.keys(individualAdvanceTimers).forEach(clearAdvanceTimer);
 
-      controlMessage("Saving completed game and final results...");
+      if (progressionMode === "individual") {
+        const statesSnap = await get(ref(db, "gameStudentState/" + currentGameId));
+        const states = statesSnap.val() || {};
+        const updates = {};
 
+        for (const [uid, state] of Object.entries(states)) {
+          if (!state || state.finished) continue;
+          updates[uid + "/finished"] = true;
+          updates[uid + "/status"] = "finished";
+        }
+
+        if (Object.keys(updates).length) {
+          await update(ref(db, "gameStudentState/" + currentGameId), updates);
+        }
+      }
+
+      controlMessage("Saving completed game and final results...");
       const saved = await saveGameHistory();
 
       [
-        "startGameBtn",
-        "pauseGameBtn",
-        "resumeGameBtn",
-        "revealAnswerBtn",
-        "nextQuestionBtn",
-        "endGameBtn"
+        "startGameBtn", "pauseGameBtn", "resumeGameBtn",
+        "revealAnswerBtn", "nextQuestionBtn", "endGameBtn"
       ].forEach(hideButton);
 
-      if (stopPlayersListener) {
-        stopPlayersListener();
-        stopPlayersListener = null;
-      }
+      if (stopPlayersListener) stopPlayersListener();
+      if (stopScoresListener) stopScoresListener();
+      if (stopAnswersListener) stopAnswersListener();
+      if (stopStudentStatesListener) stopStudentStatesListener();
 
-      if (stopScoresListener) {
-        stopScoresListener();
-        stopScoresListener = null;
-      }
+      stopPlayersListener = null;
+      stopScoresListener = null;
+      stopAnswersListener = null;
+      stopStudentStatesListener = null;
 
-      if (stopAnswersListener) {
-        stopAnswersListener();
-        stopAnswersListener = null;
-      }
-
-      if (stopStudentStatesListener) {
-        stopStudentStatesListener();
-        stopStudentStatesListener = null;
-      }
-
-      controlMessage(
-        saved
-          ? "Game finished successfully. Final results and participants have been saved to Game History."
-          : "This game was already saved to Game History. No duplicate record was created."
+      controlMessage(saved
+        ? "Game finished successfully. Final results and participants have been saved to Game History."
+        : "This game was already saved to Game History. No duplicate record was created."
       );
-
     } catch (error) {
-      console.error("End game / history error:", error);
-      controlMessage(
-        "Saving game history failed: " + (error.message || error),
-        true
-      );
+      console.error(error);
+      controlMessage("Saving game history failed: " + (error.message || error), true);
     } finally {
       gameBusy = false;
     }
@@ -1433,7 +1221,6 @@ if (section) {
 
   async function createGame(event) {
     event.preventDefault();
-
     if (gameBusy || !teacherUid) return;
 
     message("");
@@ -1444,41 +1231,23 @@ if (section) {
     const timer = Number($("gameTimer").value);
     const mode = $("gameMode").value;
     const selectedProgression = $("gameProgression").value;
-
     const matches = availableQuestions();
 
-    if (!grade || !topic) {
-      message("Please select a grade and topic.", true);
-      return;
-    }
-
+    if (!grade || !topic) return message("Please select a grade and topic.", true);
     if (!Number.isInteger(count) || count < 1 || count > 50) {
-      message("Choose between 1 and 50 questions.", true);
-      return;
+      return message("Choose between 1 and 50 questions.", true);
     }
-
     if (!Number.isInteger(timer) || timer < 5 || timer > 120) {
-      message("Timer must be between 5 and 120 seconds.", true);
-      return;
+      return message("Timer must be between 5 and 120 seconds.", true);
     }
-
     if (count > matches.length) {
-      message(
-        "Only " + matches.length +
-        " questions are available for this topic. Add more questions or choose a smaller number.",
-        true
-      );
-      return;
+      return message(`Only ${matches.length} questions are available.`, true);
     }
-
     if (!["classic", "speed"].includes(mode)) {
-      message("Please select a valid game mode.", true);
-      return;
+      return message("Please select a valid game mode.", true);
     }
-
     if (!["synchronized", "individual"].includes(selectedProgression)) {
-      message("Please select a valid progression mode.", true);
-      return;
+      return message("Please select a valid progression mode.", true);
     }
 
     gameBusy = true;
@@ -1491,12 +1260,10 @@ if (section) {
 
     try {
       const selected = shuffle(matches).slice(0, count);
-
       gameId = push(ref(db, "games")).key;
-
       if (!gameId) throw new Error("Could not create a game ID.");
 
-      const privateQuestions = selected.map((q) => ({
+      const privateQuestions = selected.map(q => ({
         grade: q.grade,
         topic: q.topic,
         text: q.text,
@@ -1521,16 +1288,13 @@ if (section) {
 
       for (let attempt = 0; attempt < 15; attempt++) {
         const pin = makePin();
-
         if (await reservePin(gameId, pin)) {
           reservedPin = pin;
           break;
         }
       }
 
-      if (!reservedPin) {
-        throw new Error("Could not reserve a unique PIN. Please try again.");
-      }
+      if (!reservedPin) throw new Error("Could not reserve a unique PIN.");
 
       currentStage = "Saving public game";
       await set(ref(db, "games/" + gameId), publicGame);
@@ -1556,7 +1320,6 @@ if (section) {
 
       $("gamePin").textContent = reservedPin;
       $("gameJoinLink").value = joinUrl;
-
       $("gameQr").src =
         "https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=" +
         encodeURIComponent(joinUrl);
@@ -1568,20 +1331,18 @@ if (section) {
       $("teacherQuestionPreview").classList.add("hidden");
 
       currentStage = "Opening student lobby";
-
       listenToPlayers(gameId);
       listenToScores(gameId);
 
       message("Game created successfully.");
-
     } catch (error) {
-      console.error("Create game error:", error);
+      console.error(error);
 
       if (reservedPin) {
         try {
           await remove(ref(db, "gamePins/" + reservedPin));
         } catch (cleanupError) {
-          console.error("PIN cleanup error:", cleanupError);
+          console.error(cleanupError);
         }
       }
 
@@ -1590,7 +1351,7 @@ if (section) {
           await remove(ref(db, "games/" + gameId));
           await remove(ref(db, "gamePrivate/" + gameId));
         } catch (cleanupError) {
-          console.error("Game cleanup error:", cleanupError);
+          console.error(cleanupError);
         }
       }
 
@@ -1599,7 +1360,6 @@ if (section) {
         ": " + (error.message || error),
         true
       );
-
     } finally {
       gameBusy = false;
       $("createGameBtn").disabled = false;
@@ -1636,30 +1396,28 @@ if (section) {
   $("nextQuestionBtn").addEventListener("click", nextQuestion);
   $("endGameBtn").addEventListener("click", endGame);
 
-  onAuthStateChanged(auth, async (user) => {
+  onAuthStateChanged(auth, async user => {
     if (!user || user.isAnonymous) return;
 
     try {
       const allowed = await get(ref(db, "allowedTeachers/" + user.uid));
-
       if (allowed.val() !== true) return;
 
       teacherUid = user.uid;
 
-      const settingsSnapshot = await get(
+      const settingsSnap = await get(
         ref(db, "teachers/" + teacherUid + "/settings")
       );
-
-      const settings = settingsSnapshot.val() || {};
+      const settings = settingsSnap.val() || {};
 
       $("gameTimer").value = settings.defaultTimer || 20;
       $("gameMode").value = settings.defaultMode || "classic";
 
-      const questionSnapshot = await get(
+      const questionsSnap = await get(
         ref(db, "teachers/" + teacherUid + "/questions")
       );
 
-      const raw = questionSnapshot.val() || {};
+      const raw = questionsSnap.val() || {};
 
       questions = Object.entries(raw).map(([id, q]) => ({
         id,
@@ -1678,10 +1436,8 @@ if (section) {
       );
 
       updateTopics();
-
     } catch (error) {
-      console.error("Game setup error:", error);
-
+      console.error(error);
       showLoadMessage(
         "Could not load your questions or settings. Check Firebase permissions.",
         true
