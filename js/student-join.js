@@ -1,13 +1,13 @@
 
 /* ------------------------------------------------------------
-   js/student-join.js — Phase 5
+   js/student-join.js — Phase 7
    Student:
-   - Anonymous authentication and PIN lookup
-   - Registration and waiting room
-   - Live questions and countdown
-   - Answer submission
-   - Answer feedback and score
-   - Final leaderboard
+   - PIN joining and registration
+   - Synchronized progression
+   - Individual progression
+   - Per-student question state
+   - Answer submission and feedback
+   - Countdown, scores and leaderboard
    ------------------------------------------------------------ */
 
 import { auth, db, configMissing } from "./firebase-config.js";
@@ -31,7 +31,6 @@ const formSection = $("joinFormSection");
 const waitingSection = $("waitingSection");
 const gamePlaySection = $("gamePlaySection");
 const resultsSection = $("resultsSection");
-
 const joinForm = $("studentJoinForm");
 const joinButton = $("joinGameBtn");
 const joinMessage = $("joinMessage");
@@ -39,6 +38,7 @@ const joinMessage = $("joinMessage");
 let studentUid = null;
 let gameId = null;
 let gameData = null;
+let studentState = null;
 let studentName = "";
 let studentSection = "";
 
@@ -46,7 +46,9 @@ let playerAnswers = {};
 let currentQuestionIndex = null;
 let selectedChoice = null;
 let countdownInterval = null;
+
 let gameListener = null;
+let studentStateListener = null;
 let answerListener = null;
 let scoreListener = null;
 
@@ -82,7 +84,6 @@ function stopCountdown() {
 function showWaiting(name, section) {
   formSection.classList.add("hidden");
   waitingSection.classList.remove("hidden");
-
   $("waitingPin").textContent = pin;
   $("waitingStudent").textContent = `${name} — ${section}`;
 }
@@ -97,54 +98,57 @@ function showGameplay() {
 
 function showFinalResults() {
   stopCountdown();
-
   gamePlaySection.classList.add("hidden");
   waitingSection.classList.add("hidden");
   formSection.classList.add("hidden");
   resultsSection.classList.remove("hidden");
-
   $("finalStudentName").textContent = studentName;
 }
 
-function updateCountdown(game) {
+function getQuestionState() {
+  return gameData?.progressionMode === "individual"
+    ? studentState
+    : gameData;
+}
+
+function getQuestionIndex(state) {
+  return Number(state?.currentQuestionIndex);
+}
+
+function updateCountdown(state) {
   stopCountdown();
 
   const timerElement = $("questionTimer");
 
   function refresh() {
-    if (game.status === "paused") {
+    if (state.status === "paused") {
       timerElement.textContent =
-        Math.max(0, Number(game.pausedRemaining) || 0);
+        Math.max(0, Number(state.pausedRemaining) || 0);
       return;
     }
 
-    if (game.status !== "active") {
+    if (state.status !== "active") {
       timerElement.textContent = "--";
       return;
     }
 
     const remaining = Math.max(
       0,
-      Math.ceil(
-        (Number(game.answerDeadline) - Date.now()) / 1000
-      )
+      Math.ceil((Number(state.answerDeadline) - Date.now()) / 1000)
     );
 
     timerElement.textContent = remaining;
 
     if (remaining <= 0) {
       stopCountdown();
-      setPlayMessage(
-        "Time is up! Wait for your teacher to reveal the answer."
-      );
-
+      setPlayMessage("Time is up! Wait for the answer to be revealed.");
       disableAnswerButtons();
     }
   }
 
   refresh();
 
-  if (game.status === "active") {
+  if (state.status === "active") {
     countdownInterval = setInterval(refresh, 250);
   }
 }
@@ -155,11 +159,9 @@ function disableAnswerButtons() {
   });
 }
 
-function renderChoices(question, index, game) {
+function renderChoices(question, index, state) {
   const container = $("answerChoices");
-
-   $("answerStatus").className = "status center";
-   
+  $("answerStatus").className = "status center";
   container.replaceChildren();
 
   const choices = Array.isArray(question.choices)
@@ -182,14 +184,13 @@ function renderChoices(question, index, game) {
     button.style.display = "block";
     button.style.width = "100%";
     button.style.marginBottom = "10px";
-
     button.textContent =
       String.fromCharCode(65 + choiceIndex) + ". " + choice;
 
     button.disabled =
       Boolean(existingAnswer) ||
-      game.status !== "active" ||
-      game.answerRevealed === true;
+      state.status !== "active" ||
+      state.answerRevealed === true;
 
     if (selectedChoice === choiceIndex) {
       button.classList.add("selected");
@@ -204,17 +205,17 @@ function renderChoices(question, index, game) {
 
   if (existingAnswer) {
     $("answerStatus").textContent = "Your answer has been submitted.";
-    setPlayMessage("Wait for your teacher to reveal the answer.");
+    setPlayMessage("Your answer is locked. Wait for the answer.");
   } else {
     $("answerStatus").textContent = "";
     setPlayMessage(
-      game.status === "paused"
+      state.status === "paused"
         ? "The game is paused."
         : "Choose your answer."
     );
   }
 
-  if (game.status === "paused" || game.answerRevealed === true) {
+  if (state.status === "paused" || state.answerRevealed === true) {
     disableAnswerButtons();
   }
 }
@@ -231,18 +232,25 @@ async function submitAnswer(questionIndex, choiceIndex, clickedButton) {
   clickedButton.disabled = true;
 
   try {
-    const latestSnapshot = await get(
-      ref(db, "games/" + gameId)
+    const individual = gameData.progressionMode === "individual";
+
+    const stateSnapshot = await get(
+      ref(
+        db,
+        individual
+          ? "gameStudentState/" + gameId + "/" + studentUid
+          : "games/" + gameId
+      )
     );
 
-    const latestGame = latestSnapshot.val();
+    const latestState = stateSnapshot.val();
 
     if (
-      !latestGame ||
-      latestGame.status !== "active" ||
-      latestGame.answerRevealed === true ||
-      Number(latestGame.currentQuestionIndex) !== questionIndex ||
-      Date.now() > Number(latestGame.answerDeadline)
+      !latestState ||
+      latestState.status !== "active" ||
+      latestState.answerRevealed === true ||
+      getQuestionIndex(latestState) !== questionIndex ||
+      Date.now() > Number(latestState.answerDeadline)
     ) {
       throw new Error("The answer period has ended.");
     }
@@ -261,27 +269,25 @@ async function submitAnswer(questionIndex, choiceIndex, clickedButton) {
     playerAnswers["q" + questionIndex] = answer;
     selectedChoice = choiceIndex;
 
-    renderChoices(latestGame.currentQuestion, questionIndex, latestGame);
+    renderChoices(latestState.currentQuestion, questionIndex, latestState);
 
     $("answerStatus").textContent = "Answer submitted successfully!";
-    setPlayMessage("Your answer is locked. Wait for the teacher.");
+    setPlayMessage("Your answer is locked. Wait for the answer.");
 
   } catch (error) {
     console.error("Answer submission error:", error);
-
     clickedButton.disabled = false;
-
     $("answerStatus").textContent =
       error.message || "Could not submit your answer.";
   }
 }
 
-function renderQuestion(game) {
-  if (!game.currentQuestion) return;
+function renderQuestion(state) {
+  if (!state?.currentQuestion) return;
 
-  const index = Number(game.currentQuestionIndex);
+  const index = getQuestionIndex(state);
 
-  if (!Number.isInteger(index)) return;
+  if (!Number.isInteger(index) || index < 0) return;
 
   if (currentQuestionIndex !== index) {
     currentQuestionIndex = index;
@@ -290,21 +296,23 @@ function renderQuestion(game) {
 
   showGameplay();
 
+  const total = Number(gameData.questionCount) || 0;
+
   $("questionProgress").textContent =
-    "Question " + (index + 1) + " of " + game.questionCount;
+    "Question " + (index + 1) + " of " + total;
 
   $("liveQuestionText").textContent =
-    game.currentQuestion.text || "Question unavailable.";
+    state.currentQuestion.text || "Question unavailable.";
 
-  renderChoices(game.currentQuestion, index, game);
-  updateCountdown(game);
+  renderChoices(state.currentQuestion, index, state);
+  updateCountdown(state);
 
-  if (game.status === "paused") {
+  if (state.status === "paused") {
     setPlayMessage("Your teacher has paused the game.");
   }
 
-  if (game.answerRevealed === true) {
-    showAnswerFeedback(game);
+  if (state.answerRevealed === true) {
+    showAnswerFeedback(state);
   } else {
     $("answerStatus").textContent =
       playerAnswers["q" + index]
@@ -313,15 +321,14 @@ function renderQuestion(game) {
   }
 }
 
-function showAnswerFeedback(game) {
-  const index = Number(game.currentQuestionIndex);
+function showAnswerFeedback(state) {
+  const index = getQuestionIndex(state);
   const answer = playerAnswers["q" + index];
+  const correctIndex = Number(state.revealedCorrectIndex);
 
-  const correctIndex = Number(game.revealedCorrectIndex);
-
-  const choices = Array.isArray(game.currentQuestion.choices)
-    ? game.currentQuestion.choices
-    : Object.values(game.currentQuestion.choices || {});
+  const choices = Array.isArray(state.currentQuestion.choices)
+    ? state.currentQuestion.choices
+    : Object.values(state.currentQuestion.choices || {});
 
   const correctChoice = choices[correctIndex] || "Unavailable";
 
@@ -329,8 +336,7 @@ function showAnswerFeedback(game) {
     $("answerStatus").textContent =
       "You did not submit an answer. Correct answer: " + correctChoice;
   } else if (Number(answer.choiceIndex) === correctIndex) {
-    $("answerStatus").textContent =
-      "Correct! Well done!";
+    $("answerStatus").textContent = "Correct! Well done!";
   } else {
     $("answerStatus").textContent =
       "Not quite. The correct answer is: " + correctChoice;
@@ -342,28 +348,20 @@ function showAnswerFeedback(game) {
       ? "good"
       : "bad");
 
-  $("answerChoices").querySelectorAll("button").forEach((button) => {
-    button.disabled = true;
-  });
+  disableAnswerButtons();
 
   $("gamePlayStatus").textContent =
-    game.revealedExplanation ||
-    "Wait for your teacher to continue.";
+    state.revealedExplanation || "Wait for your teacher to continue.";
 
   stopCountdown();
 }
 
 function renderScore(scores) {
   const ownScore = scores && scores[studentUid];
-
   if (!ownScore) return;
 
-  $("studentScore").textContent =
-    Number(ownScore.score) || 0;
-
-  $("finalStudentScore").textContent =
-    Number(ownScore.score) || 0;
-
+  $("studentScore").textContent = Number(ownScore.score) || 0;
+  $("finalStudentScore").textContent = Number(ownScore.score) || 0;
   $("finalStudentRank").textContent =
     "Your rank: #" + (ownScore.rank || "-");
 }
@@ -396,8 +394,7 @@ function renderLeaderboard(scores) {
 
     const score = document.createElement("span");
     score.className = "muted";
-    score.textContent =
-      Number(student.score) + " points";
+    score.textContent = Number(student.score) + " points";
 
     row.append(name, score);
     container.appendChild(row);
@@ -412,13 +409,10 @@ function listenToAnswers() {
     (snapshot) => {
       playerAnswers = snapshot.val() || {};
 
-      if (gameData && gameData.currentQuestion) {
-        renderQuestion(gameData);
-      }
+      const state = getQuestionState();
+      if (state?.currentQuestion) renderQuestion(state);
     },
-    (error) => {
-      console.error("Answer listener error:", error);
-    }
+    (error) => console.error("Answer listener error:", error)
   );
 }
 
@@ -429,12 +423,43 @@ function listenToScores() {
     ref(db, "gameScores/" + gameId),
     (snapshot) => {
       const scores = snapshot.val() || {};
-
       renderScore(scores);
       renderLeaderboard(scores);
     },
+    (error) => console.error("Score listener error:", error)
+  );
+}
+
+function listenToStudentState() {
+  if (studentStateListener) studentStateListener();
+
+  studentStateListener = onValue(
+    ref(db, "gameStudentState/" + gameId + "/" + studentUid),
+    (snapshot) => {
+      studentState = snapshot.val();
+
+      if (gameData?.progressionMode === "individual") {
+        if (gameData.status === "finished") {
+          showFinalResults();
+        } else if (
+          studentState?.status === "finished" ||
+          studentState?.status === "completed"
+        ) {
+          stopCountdown();
+          gamePlaySection.classList.add("hidden");
+          $("gamePlayStatus").textContent =
+            "You have completed all the questions. Wait for the final results.";
+        } else if (
+          studentState?.currentQuestion &&
+          ["active", "paused"].includes(studentState.status)
+        ) {
+          renderQuestion(studentState);
+        }
+      }
+    },
     (error) => {
-      console.error("Score listener error:", error);
+      console.error("Student state listener error:", error);
+      showError("Unable to load your individual game progress. Please refresh.");
     }
   );
 }
@@ -453,9 +478,7 @@ function listenToGame() {
 
       gameData = snapshot.val();
 
-      const status = gameData.status;
-
-      if (status === "waiting") {
+      if (gameData.status === "waiting") {
         stopCountdown();
 
         gamePlaySection.classList.add("hidden");
@@ -465,13 +488,21 @@ function listenToGame() {
         $("waitingGameStatus").textContent =
           "Waiting for your teacher to start the game...";
 
-      } else if (status === "active" || status === "paused") {
-        renderQuestion(gameData);
+      } else if (gameData.status === "active" ||
+                 gameData.status === "paused") {
 
-      } else if (status === "finished") {
+        if (gameData.progressionMode === "individual") {
+          if (studentState?.currentQuestion) {
+            renderQuestion(studentState);
+          }
+        } else {
+          renderQuestion(gameData);
+        }
+
+      } else if (gameData.status === "finished") {
         showFinalResults();
 
-      } else if (status === "cancelled") {
+      } else if (gameData.status === "cancelled") {
         stopCountdown();
         showError("Your teacher has closed this game.");
       }
@@ -581,6 +612,7 @@ joinForm.addEventListener("submit", async (event) => {
     listenToAnswers();
     listenToScores();
     listenToGame();
+    listenToStudentState();
 
   } catch (error) {
     showError(error.message || "Unable to join the game.");
