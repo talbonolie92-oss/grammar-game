@@ -4,6 +4,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10172b">
   <title>Join Game - Grammar Game</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
@@ -12,7 +13,6 @@
   <main class="screen center-screen">
     <div class="card narrow">
 
-      <!-- Branding -->
       <div class="login-brand">
         <span class="school-logo lg">
           <span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span>
@@ -23,32 +23,73 @@
         <p class="tagline">Learn. Practice. Complete.</p>
       </div>
 
-      <!-- Loading -->
-      <div id="joinLoading">
+      <div id="joinLoading" class="hidden">
         <p class="muted center">Connecting to the game...</p>
       </div>
 
-      <!-- Error -->
       <div id="joinError" class="notice hidden" role="alert"></div>
 
-      <!-- Join Form -->
-      <section id="joinFormSection" class="hidden">
+      <!-- Enter Game PIN -->
+      <section id="pinEntrySection">
         <h2>Join a game</h2>
+        <p class="muted">Enter the six-digit Game PIN provided by your teacher.</p>
+
+        <form id="pinEntryForm">
+          <label>Game PIN
+            <input
+              id="pinInput"
+              type="text"
+              inputmode="numeric"
+              pattern="[0-9]{6}"
+              minlength="6"
+              maxlength="6"
+              placeholder="Enter 6-digit PIN"
+              autocomplete="one-time-code"
+              required
+            >
+          </label>
+
+          <button id="findGameBtn" class="btn block" type="submit">
+            Find Game
+          </button>
+
+          <p id="pinMessage" class="status" role="status"></p>
+        </form>
+      </section>
+
+      <!-- Student Registration -->
+      <section id="joinFormSection" class="hidden">
+        <h2>You're almost there!</h2>
         <p id="gameDetails" class="muted"></p>
 
         <form id="studentJoinForm">
           <label>Your name
-            <input id="studentName" type="text" maxlength="40"
-              placeholder="Enter your name" required autocomplete="name">
+            <input
+              id="studentName"
+              type="text"
+              maxlength="40"
+              placeholder="Enter your name"
+              required
+              autocomplete="name"
+            >
           </label>
 
           <label>Class / Section
-            <input id="studentSection" type="text" maxlength="30"
-              placeholder="For example: 10-Newton" required>
+            <input
+              id="studentSection"
+              type="text"
+              maxlength="30"
+              placeholder="For example: 10-Newton"
+              required
+            >
           </label>
 
           <button id="joinGameBtn" class="btn block" type="submit">
             Join game
+          </button>
+
+          <button id="changePinBtn" class="btn ghost block" type="button">
+            Use a different PIN
           </button>
 
           <p id="joinMessage" class="status" role="status"></p>
@@ -84,7 +125,6 @@
         </div>
 
         <div id="answerChoices"></div>
-
         <p id="answerStatus" class="status center" role="status"></p>
         <p id="gamePlayStatus" class="muted center" role="status">
           Choose your answer.
@@ -115,7 +155,6 @@
         <div id="studentLeaderboard"></div>
       </section>
 
-      <!-- Home Link -->
       <p class="muted center">
         <a href="index.html">Back to home</a>
       </p>
