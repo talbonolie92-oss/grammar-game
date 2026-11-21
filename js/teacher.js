@@ -6,7 +6,7 @@
 // - Question Bank integration
 // - Completed Game History
 // - Dashboard statistics and recent sessions
-// - Game history filters and participant details
+// - Game history filters, participant details and performance reports
 // ------------------------------------------------------------
 
 import { auth, db, configMissing } from "./firebase-config.js";
@@ -550,6 +550,7 @@ function startHistoryListener() {
         );
 
       renderHistory();
+      renderPerformanceReports();
       renderDashboardHistory();
       renderDashboardStats();
     },
@@ -1048,8 +1049,312 @@ function renderDashboardHistory() {
   });
 }
 
+
 // ============================================================
-// INITIAL HISTORY UI SETUP
+// PHASE 6: PERFORMANCE REPORTS
+// Reports are calculated from completed games in gameHistory.
+// ============================================================
+
+function prepareReportsSection() {
+  const section = $("sec-reports");
+  if (!section || $("reportSummary")) return;
+
+  section.replaceChildren();
+
+  const header = document.createElement("header");
+  header.className = "page-head";
+  header.append(
+    createTextElement("h1", "", "Performance Reports"),
+    createTextElement(
+      "p",
+      "muted",
+      "Analyze student results from your completed games."
+    )
+  );
+
+  const filters = document.createElement("div");
+  filters.className = "card";
+  const filterGrid = document.createElement("div");
+  filterGrid.className = "toolbar-grid";
+
+  filterGrid.append(
+    createSelect("reportGradeFilter", "Grade", [
+      { value: "", label: "All grades" },
+      { value: "10", label: "Grade 10" },
+      { value: "11", label: "Grade 11" },
+      { value: "12", label: "Grade 12" }
+    ]),
+    createSelect("reportSectionFilter", "Section", [
+      { value: "", label: "All sections" }
+    ]),
+    createSelect("reportTopicFilter", "Topic", [
+      { value: "", label: "All topics" }
+    ])
+  );
+
+  filters.appendChild(filterGrid);
+
+  const summary = document.createElement("div");
+  summary.id = "reportSummary";
+  summary.className = "stats-grid";
+
+  const studentResults = document.createElement("div");
+  studentResults.id = "reportStudentResults";
+  studentResults.className = "card";
+
+  section.append(
+    header,
+    filters,
+    summary,
+    studentResults
+  );
+
+  [
+    "reportGradeFilter",
+    "reportSectionFilter",
+    "reportTopicFilter"
+  ].forEach((id) => {
+    $(id).addEventListener("change", renderPerformanceReports);
+  });
+}
+
+function getReportGames() {
+  const grade = $("reportGradeFilter")?.value || "";
+  const section = $("reportSectionFilter")?.value || "";
+  const topic = $("reportTopicFilter")?.value || "";
+
+  return historyGames.filter((game) => {
+    if (grade && String(game.grade || "") !== grade) return false;
+    if (topic && String(game.topic || "") !== topic) return false;
+
+    if (section) {
+      const hasSection = getPlayers(game).some(
+        (player) => player.section === section
+      );
+      if (!hasSection) return false;
+    }
+
+    return true;
+  });
+}
+
+function updateReportFilters() {
+  const sectionSelect = $("reportSectionFilter");
+  const topicSelect = $("reportTopicFilter");
+  if (!sectionSelect || !topicSelect) return;
+
+  const previousSection = sectionSelect.value;
+  const previousTopic = topicSelect.value;
+
+  const selectedGrade = $("reportGradeFilter").value;
+  const relevantGames = historyGames.filter((game) =>
+    !selectedGrade || String(game.grade || "") === selectedGrade
+  );
+
+  const sections = [...new Set(
+    relevantGames.flatMap((game) =>
+      getPlayers(game)
+        .map((player) => player.section)
+        .filter((name) => name && name !== "No section")
+    )
+  )].sort((a, b) => a.localeCompare(b));
+
+  const topics = [...new Set(
+    relevantGames
+      .map((game) => String(game.topic || "").trim())
+      .filter(Boolean)
+  )].sort((a, b) => a.localeCompare(b));
+
+  sectionSelect.replaceChildren();
+  const allSections = document.createElement("option");
+  allSections.value = "";
+  allSections.textContent = "All sections";
+  sectionSelect.appendChild(allSections);
+
+  sections.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    sectionSelect.appendChild(option);
+  });
+
+  topicSelect.replaceChildren();
+  const allTopics = document.createElement("option");
+  allTopics.value = "";
+  allTopics.textContent = "All topics";
+  topicSelect.appendChild(allTopics);
+
+  topics.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    topicSelect.appendChild(option);
+  });
+
+  if (sections.includes(previousSection)) {
+    sectionSelect.value = previousSection;
+  }
+  if (topics.includes(previousTopic)) {
+    topicSelect.value = previousTopic;
+  }
+}
+
+function createReportMetric(label, value) {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.append(
+    createTextElement("p", "muted", label),
+    createTextElement("h2", "", value)
+  );
+  return card;
+}
+
+function renderPerformanceReports() {
+  prepareReportsSection();
+  updateReportFilters();
+
+  const games = getReportGames();
+  const summary = $("reportSummary");
+  const results = $("reportStudentResults");
+
+  summary.replaceChildren();
+  results.replaceChildren();
+
+  const students = new Map();
+  let totalScore = 0;
+  let totalCorrect = 0;
+  let totalAnswered = 0;
+  let totalQuestions = 0;
+  let participantEntries = 0;
+
+  games.forEach((game) => {
+    totalQuestions += Number(game.questionCount) || 0;
+
+    getPlayers(game)
+      .filter((player) =>
+        !$("reportSectionFilter").value ||
+        player.section === $("reportSectionFilter").value
+      )
+      .forEach((player) => {
+      participantEntries++;
+      totalScore += player.score;
+      totalCorrect += player.correct;
+      totalAnswered += player.answered;
+
+      const key = player.uid || (player.name + "|" + player.section);
+      if (!students.has(key)) {
+        students.set(key, {
+          name: player.name,
+          section: player.section,
+          games: 0,
+          score: 0,
+          correct: 0,
+          answered: 0
+        });
+      }
+
+      const student = students.get(key);
+      student.games++;
+      student.score += player.score;
+      student.correct += player.correct;
+      student.answered += player.answered;
+    });
+  });
+
+  const uniqueStudents = students.size;
+  const averageScore = participantEntries
+    ? Math.round(totalScore / participantEntries)
+    : 0;
+  const accuracy = totalAnswered
+    ? Math.round((totalCorrect / totalAnswered) * 100)
+    : 0;
+
+  summary.append(
+    createReportMetric("Completed games", String(games.length)),
+    createReportMetric("Student participants", String(uniqueStudents)),
+    createReportMetric("Average score per game entry", String(averageScore)),
+    createReportMetric("Answer accuracy", accuracy + "%")
+  );
+
+  results.appendChild(
+    createTextElement("h2", "", "Student Performance")
+  );
+
+  if (games.length === 0 || students.size === 0) {
+    results.appendChild(
+      createTextElement(
+        "p",
+        "muted",
+        "No participant results match these filters yet."
+      )
+    );
+    return;
+  }
+
+  const ranked = [...students.values()]
+    .map((student) => ({
+      ...student,
+      averageScore: student.games
+        ? Math.round(student.score / student.games)
+        : 0,
+      accuracy: student.answered
+        ? Math.round((student.correct / student.answered) * 100)
+        : 0
+    }))
+    .sort((a, b) =>
+      b.averageScore - a.averageScore ||
+      b.accuracy - a.accuracy ||
+      a.name.localeCompare(b.name)
+    );
+
+  const table = document.createElement("table");
+  table.className = "history-results-table";
+
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  [
+    "Rank",
+    "Student",
+    "Section",
+    "Games",
+    "Average Score",
+    "Accuracy"
+  ].forEach((label) => {
+    headerRow.appendChild(createTextElement("th", "", label));
+  });
+  thead.appendChild(headerRow);
+
+  const tbody = document.createElement("tbody");
+  ranked.forEach((student, index) => {
+    const row = document.createElement("tr");
+    [
+      "#" + (index + 1),
+      student.name,
+      student.section,
+      student.games,
+      student.averageScore,
+      student.accuracy + "%"
+    ].forEach((value) => {
+      row.appendChild(createTextElement("td", "", value));
+    });
+    tbody.appendChild(row);
+  });
+
+  table.append(thead, tbody);
+  results.appendChild(table);
+
+  results.appendChild(
+    createTextElement(
+      "p",
+      "muted small-text",
+      "Average score is calculated from each student's saved game scores. Accuracy is correct answers divided by answered questions."
+    )
+  );
+}
+
+// ============================================================
+// INITIAL HISTORY AND REPORTS UI SETUP
 // ============================================================
 
 prepareHistorySection();
+prepareReportsSection();
