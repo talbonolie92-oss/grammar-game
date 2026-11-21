@@ -1,75 +1,117 @@
+
 // ------------------------------------------------------------
-// js/teacher.js  (Phase 2)
+// js/teacher.js — Phase 6
 // - Teacher login and logout
-// - Checks that the account is on the allowedTeachers list
-// - Navigation between the six sections
-// - Dashboard greeting and counts
-// - Settings: game defaults and class sections
-// - Starts and stops the Question Bank (js/questions.js, Phase 3)
+// - Settings and class sections
+// - Question Bank integration
+// - Completed Game History
+// - Dashboard statistics and recent sessions
+// - Game history filters and participant details
 // ------------------------------------------------------------
+
 import { auth, db, configMissing } from "./firebase-config.js";
+
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
 import {
   ref, onValue, get, set, update, remove, push
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+
 import { h, showScreen, cleanText } from "./common.js";
 import { startQuestionBank, stopQuestionBank } from "./questions.js";
 
 const $ = (id) => document.getElementById(id);
 
-// If firebase-config.js still has the PASTE_ values, stop here.
 if (configMissing) {
   showScreen("configScreen");
   throw new Error("Firebase settings are missing. Edit js/firebase-config.js");
 }
 
 // ---------- Settings ----------
-const SECTION_PAGES = ["dashboard", "questions", "create", "history", "reports", "settings"];
+const SECTION_PAGES = [
+  "dashboard",
+  "questions",
+  "create",
+  "history",
+  "reports",
+  "settings"
+];
+
 const DEFAULTS = {
   displayName: "",
   defaultTimer: 20,
   defaultMode: "classic",
   showResultsEachQuestion: true
 };
+
 const MAX_SECTIONS = 30;
 
 // ---------- State ----------
 let user = null;
 let settings = { ...DEFAULTS };
-let classSections = [];        // [{ id, name }]
+let classSections = [];
 let unsubSettings = null;
-let formFilled = false;        // fill the settings form only once, so typing is never overwritten
+let unsubHistory = null;
+let formFilled = false;
 let navReady = false;
-let editingId = null;          // which class section is being renamed
+let editingId = null;
 let editingValue = "";
 
+let historyGames = [];
+let selectedHistoryId = null;
+
+// ---------- Paths ----------
 function settingsPath() {
   return "teachers/" + user.uid + "/settings";
+}
+
+function historyPath() {
+  return "gameHistory/" + user.uid;
 }
 
 // ============================================================
 // LOGIN AND LOGOUT
 // ============================================================
+
 function friendlyAuthError(err) {
   const code = (err && err.code) || "";
-  if (code.includes("invalid-credential") || code.includes("wrong-password") || code.includes("user-not-found") || code.includes("invalid-email")) {
+
+  if (
+    code.includes("invalid-credential") ||
+    code.includes("wrong-password") ||
+    code.includes("user-not-found") ||
+    code.includes("invalid-email")
+  ) {
     return "Wrong email or password.";
   }
-  if (code.includes("too-many-requests")) return "Too many tries. Please wait a minute and try again.";
-  if (code.includes("network")) return "No internet connection.";
+
+  if (code.includes("too-many-requests")) {
+    return "Too many tries. Please wait a minute and try again.";
+  }
+
+  if (code.includes("network")) {
+    return "No internet connection.";
+  }
+
   return "Could not log in: " + ((err && err.message) || code);
 }
 
 $("loginForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+
   $("loginError").textContent = "";
   $("loginBtn").disabled = true;
+
   try {
-    await signInWithEmailAndPassword(auth, $("email").value.trim(), $("password").value);
+    await signInWithEmailAndPassword(
+      auth,
+      $("email").value.trim(),
+      $("password").value
+    );
   } catch (err) {
     $("loginError").textContent = friendlyAuthError(err);
   } finally {
@@ -79,36 +121,58 @@ $("loginForm").addEventListener("submit", async (e) => {
 
 async function logout() {
   stopQuestionBank();
-  if (unsubSettings) { unsubSettings(); unsubSettings = null; }
+
+  if (unsubSettings) {
+    unsubSettings();
+    unsubSettings = null;
+  }
+
+  if (unsubHistory) {
+    unsubHistory();
+    unsubHistory = null;
+  }
+
   await signOut(auth);
 }
+
 $("logoutBtn").addEventListener("click", logout);
 $("deniedLogout").addEventListener("click", logout);
 
 onAuthStateChanged(auth, async (u) => {
   if (!u) {
     stopQuestionBank();
-    if (unsubSettings) { unsubSettings(); unsubSettings = null; }
+
+    if (unsubSettings) {
+      unsubSettings();
+      unsubSettings = null;
+    }
+
+    if (unsubHistory) {
+      unsubHistory();
+      unsubHistory = null;
+    }
+
     user = null;
+    historyGames = [];
     $("password").value = "";
     showScreen("loginScreen");
     return;
   }
 
-  // Students sign in anonymously. They must never see the teacher area.
   if (u.isAnonymous) {
     await signOut(auth);
     return;
   }
 
-  // Is this account on the allowedTeachers list?
   let allowed = false;
+
   try {
     const snap = await get(ref(db, "allowedTeachers/" + u.uid));
     allowed = snap.val() === true;
   } catch (err) {
     allowed = false;
   }
+
   if (!allowed) {
     $("myUid").textContent = u.uid;
     showScreen("deniedScreen");
@@ -122,88 +186,140 @@ onAuthStateChanged(auth, async (u) => {
 // ============================================================
 // APP START AND NAVIGATION
 // ============================================================
+
 function startApp() {
   formFilled = false;
   editingId = null;
+  selectedHistoryId = null;
+
   $("appError").classList.add("hidden");
   showScreen("appScreen");
 
-  // Phase 3: the Question Bank also tells the dashboard how many questions exist.
   $("statQuestions").textContent = "0";
+
   startQuestionBank(user.uid, (count) => {
     $("statQuestions").textContent = count;
   });
 
   if (unsubSettings) unsubSettings();
+
   unsubSettings = onValue(
     ref(db, settingsPath()),
     (snap) => {
       $("appError").classList.add("hidden");
-      const value = snap.val() || {};
-      settings = readSettings(value);
-      classSections = Object.entries(value.sections || {})
-        .map(([id, name]) => ({ id, name: String(name) }))
-        .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
 
-      if (!formFilled) { fillSettingsForm(); formFilled = true; }
+      const value = snap.val() || {};
+
+      settings = readSettings(value);
+
+      classSections = Object.entries(value.sections || {})
+        .map(([id, name]) => ({
+          id,
+          name: String(name)
+        }))
+        .sort((a, b) =>
+          a.name.localeCompare(
+            b.name,
+            undefined,
+            { numeric: true, sensitivity: "base" }
+          )
+        );
+
+      if (!formFilled) {
+        fillSettingsForm();
+        formFilled = true;
+      }
+
       renderHeaderInfo();
       renderSections();
     },
     () => {
       $("appError").textContent =
         "Could not read your settings. Make sure the newest database rules are published in Firebase, then reload this page.";
+
       $("appError").classList.remove("hidden");
     }
   );
+
+  startHistoryListener();
 
   if (!navReady) {
     window.addEventListener("hashchange", showSection);
     navReady = true;
   }
+
   showSection();
 }
 
-// Keeps only the settings we know about, with safe defaults.
 function readSettings(value) {
   const s = { ...DEFAULTS };
-  if (typeof value.displayName === "string") s.displayName = value.displayName;
-  if (typeof value.defaultTimer === "number") s.defaultTimer = value.defaultTimer;
-  if (value.defaultMode === "classic" || value.defaultMode === "speed") s.defaultMode = value.defaultMode;
-  if (typeof value.showResultsEachQuestion === "boolean") s.showResultsEachQuestion = value.showResultsEachQuestion;
+
+  if (typeof value.displayName === "string") {
+    s.displayName = value.displayName;
+  }
+
+  if (typeof value.defaultTimer === "number") {
+    s.defaultTimer = value.defaultTimer;
+  }
+
+  if (
+    value.defaultMode === "classic" ||
+    value.defaultMode === "speed"
+  ) {
+    s.defaultMode = value.defaultMode;
+  }
+
+  if (typeof value.showResultsEachQuestion === "boolean") {
+    s.showResultsEachQuestion = value.showResultsEachQuestion;
+  }
+
   return s;
 }
 
-// Shows the section named in the address bar (for example #settings).
 function showSection() {
   let name = location.hash.replace("#", "");
-  if (!SECTION_PAGES.includes(name)) name = "dashboard";
+
+  if (!SECTION_PAGES.includes(name)) {
+    name = "dashboard";
+  }
 
   document.querySelectorAll(".section").forEach((s) => {
     s.classList.toggle("hidden", s.id !== "sec-" + name);
   });
+
   document.querySelectorAll(".nav a").forEach((a) => {
-    if (a.dataset.section === name) a.setAttribute("aria-current", "page");
-    else a.removeAttribute("aria-current");
+    if (a.dataset.section === name) {
+      a.setAttribute("aria-current", "page");
+    } else {
+      a.removeAttribute("aria-current");
+    }
   });
+
   document.body.classList.remove("menu-open");
   window.scrollTo(0, 0);
 }
 
 // Phone menu
-$("menuBtn").addEventListener("click", () => document.body.classList.toggle("menu-open"));
-$("scrim").addEventListener("click", () => document.body.classList.remove("menu-open"));
+$("menuBtn").addEventListener("click", () => {
+  document.body.classList.toggle("menu-open");
+});
+
+$("scrim").addEventListener("click", () => {
+  document.body.classList.remove("menu-open");
+});
 
 function renderHeaderInfo() {
   const name = settings.displayName || user.email || "Teacher";
+
   $("userName").textContent = name;
   $("welcome").textContent = "Welcome back, " + name;
   $("statSections").textContent = classSections.length;
-  // statQuestions is filled by the Question Bank. Phase 6 will fill statGames and statStudents.
 }
 
 // ============================================================
 // SETTINGS: GAME DEFAULTS
 // ============================================================
+
 function fillSettingsForm() {
   $("displayName").value = settings.displayName;
   $("defaultTimer").value = settings.defaultTimer;
@@ -213,13 +329,16 @@ function fillSettingsForm() {
 
 function setStatus(text, isError) {
   const el = $("saveStatus");
+
   el.textContent = text;
   el.className = "status" + (isError ? " bad" : " good");
 }
 
 $("settingsForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+
   const timer = Math.round(Number($("defaultTimer").value));
+
   if (!(timer >= 5 && timer <= 120)) {
     setStatus("Time must be between 5 and 120 seconds.", true);
     return;
@@ -234,8 +353,8 @@ $("settingsForm").addEventListener("submit", async (e) => {
 
   $("saveSettingsBtn").disabled = true;
   setStatus("Saving…", false);
+
   try {
-    // update() changes only these four fields and leaves the class sections alone.
     await update(ref(db, settingsPath()), data);
     setStatus("Saved.", false);
   } catch (err) {
@@ -246,11 +365,14 @@ $("settingsForm").addEventListener("submit", async (e) => {
 });
 
 // ============================================================
-// SETTINGS: CLASS SECTIONS (add, rename, remove)
+// SETTINGS: CLASS SECTIONS
 // ============================================================
+
 function sectionExists(name, exceptId) {
   return classSections.some(
-    (s) => s.id !== exceptId && s.name.toLowerCase() === name.toLowerCase()
+    (s) =>
+      s.id !== exceptId &&
+      s.name.toLowerCase() === name.toLowerCase()
   );
 }
 
@@ -260,15 +382,29 @@ function sectionMessage(text) {
 
 $("addSectionForm").addEventListener("submit", async (e) => {
   e.preventDefault();
+
   sectionMessage("");
+
   const name = cleanText($("newSection").value, 30);
 
-  if (!name) { sectionMessage("Please type a section name."); return; }
-  if (sectionExists(name, null)) { sectionMessage("That section is already in the list."); return; }
-  if (classSections.length >= MAX_SECTIONS) { sectionMessage("You can have up to " + MAX_SECTIONS + " sections."); return; }
+  if (!name) {
+    sectionMessage("Please type a section name.");
+    return;
+  }
+
+  if (sectionExists(name, null)) {
+    sectionMessage("That section is already in the list.");
+    return;
+  }
+
+  if (classSections.length >= MAX_SECTIONS) {
+    sectionMessage("You can have up to " + MAX_SECTIONS + " sections.");
+    return;
+  }
 
   try {
     await set(push(ref(db, settingsPath() + "/sections")), name);
+
     $("newSection").value = "";
     $("newSection").focus();
   } catch (err) {
@@ -281,7 +417,9 @@ function renderSections() {
   list.replaceChildren();
 
   if (classSections.length === 0) {
-    list.appendChild(h("p", "muted", "No sections yet. Add your first one, for example 10-Newton."));
+    list.appendChild(
+      h("p", "muted", "No sections yet. Add your first one, for example 10-Newton.")
+    );
     return;
   }
 
@@ -289,16 +427,26 @@ function renderSections() {
     const row = h("div", "list-row");
 
     if (editingId === s.id) {
-      // Rename mode
       const input = h("input", "");
+
       input.type = "text";
       input.maxLength = 30;
       input.value = editingValue;
       input.setAttribute("aria-label", "Section name");
-      input.addEventListener("input", () => { editingValue = input.value; });
+
+      input.addEventListener("input", () => {
+        editingValue = input.value;
+      });
+
       input.addEventListener("keydown", (ev) => {
-        if (ev.key === "Enter") { ev.preventDefault(); saveRename(s.id); }
-        if (ev.key === "Escape") { cancelRename(); }
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          saveRename(s.id);
+        }
+
+        if (ev.key === "Escape") {
+          cancelRename();
+        }
       });
 
       const save = h("button", "btn small", "Save");
@@ -311,11 +459,12 @@ function renderSections() {
 
       row.append(input, save, cancel);
       list.appendChild(row);
+
       setTimeout(() => input.focus(), 0);
     } else {
-      // Normal mode
       const edit = h("button", "btn small ghost", "Rename");
       edit.type = "button";
+
       edit.addEventListener("click", () => {
         editingId = s.id;
         editingValue = s.name;
@@ -325,8 +474,10 @@ function renderSections() {
 
       const del = h("button", "btn small danger", "Remove");
       del.type = "button";
+
       del.addEventListener("click", async () => {
         if (!confirm("Remove the section “" + s.name + "”?")) return;
+
         try {
           await remove(ref(db, settingsPath() + "/sections/" + s.id));
         } catch (err) {
@@ -348,9 +499,18 @@ function cancelRename() {
 
 async function saveRename(id) {
   sectionMessage("");
+
   const name = cleanText(editingValue, 30);
-  if (!name) { sectionMessage("The section name cannot be empty."); return; }
-  if (sectionExists(name, id)) { sectionMessage("That section is already in the list."); return; }
+
+  if (!name) {
+    sectionMessage("The section name cannot be empty.");
+    return;
+  }
+
+  if (sectionExists(name, id)) {
+    sectionMessage("That section is already in the list.");
+    return;
+  }
 
   try {
     await set(ref(db, settingsPath() + "/sections/" + id), name);
@@ -360,3 +520,536 @@ async function saveRename(id) {
     sectionMessage("Could not rename the section: " + (err.message || err));
   }
 }
+
+// ============================================================
+// PHASE 6: GAME HISTORY LISTENER
+// ============================================================
+
+function startHistoryListener() {
+  if (unsubHistory) {
+    unsubHistory();
+    unsubHistory = null;
+  }
+
+  historyGames = [];
+
+  unsubHistory = onValue(
+    ref(db, historyPath()),
+    (snap) => {
+      const data = snap.val() || {};
+
+      historyGames = Object.entries(data)
+        .map(([id, game]) => ({
+          id,
+          ...game
+        }))
+        .filter((game) => game.status === "finished")
+        .sort((a, b) =>
+          (Number(b.finishedAt) || 0) -
+          (Number(a.finishedAt) || 0)
+        );
+
+      renderHistory();
+      renderDashboardHistory();
+      renderDashboardStats();
+    },
+    (error) => {
+      const message =
+        "Could not load game history. Check that your Firebase gameHistory read rules are published.";
+
+      showHistoryError(message);
+      console.error("Game history read error:", error);
+    }
+  );
+}
+
+function showHistoryError(message) {
+  const section = $("sec-history");
+
+  let notice = $("historyLoadError");
+
+  if (!notice) {
+    notice = document.createElement("div");
+    notice.id = "historyLoadError";
+    notice.className = "notice";
+    section.prepend(notice);
+  }
+
+  notice.textContent = message;
+  notice.classList.remove("hidden");
+}
+
+// ============================================================
+// PHASE 6: HISTORY HELPERS
+// ============================================================
+
+function formatDate(timestamp) {
+  const value = Number(timestamp);
+
+  if (!value || !Number.isFinite(value)) {
+    return "Date unavailable";
+  }
+
+  return new Date(value).toLocaleString(undefined, {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit"
+  });
+}
+
+function modeLabel(mode) {
+  if (mode === "speed") return "Speed Battle";
+  if (mode === "classic") return "Classic Quiz";
+  return mode || "Unknown";
+}
+
+function getPlayers(game) {
+  const players = game.players || {};
+
+  return Object.entries(players)
+    .map(([uid, player]) => ({
+      uid,
+      name: String(player.name || "Student"),
+      section: String(player.section || "No section"),
+      score: Number(player.score) || 0,
+      correct: Number(player.correct) || 0,
+      answered: Number(player.answered) || 0,
+      rank: Number(player.rank) || 0
+    }))
+    .sort((a, b) => {
+      if (a.rank && b.rank) return a.rank - b.rank;
+      return b.score - a.score;
+    });
+}
+
+function createTextElement(tag, className, text) {
+  const el = document.createElement(tag);
+
+  if (className) el.className = className;
+  el.textContent = text == null ? "" : String(text);
+
+  return el;
+}
+
+function createSelect(id, labelText, options) {
+  const label = document.createElement("label");
+  label.textContent = labelText;
+
+  const select = document.createElement("select");
+  select.id = id;
+
+  options.forEach((option) => {
+    const item = document.createElement("option");
+
+    item.value = option.value;
+    item.textContent = option.label;
+
+    select.appendChild(item);
+  });
+
+  label.appendChild(select);
+
+  return label;
+}
+
+// ============================================================
+// PHASE 6: GAME HISTORY UI
+// ============================================================
+
+function prepareHistorySection() {
+  const section = $("sec-history");
+
+  if ($("historyList")) return;
+
+  section.replaceChildren();
+
+  const header = document.createElement("header");
+  header.className = "page-head";
+
+  header.appendChild(createTextElement("h1", "", "Game History"));
+  header.appendChild(
+    createTextElement(
+      "p",
+      "muted",
+      "Review your completed games, participants and final results."
+    )
+  );
+
+  const filters = document.createElement("div");
+  filters.className = "card";
+
+  const filterGrid = document.createElement("div");
+  filterGrid.className = "toolbar-grid";
+
+  filterGrid.append(
+    createSelect("historyGradeFilter", "Grade", [
+      { value: "", label: "All grades" },
+      { value: "10", label: "Grade 10" },
+      { value: "11", label: "Grade 11" },
+      { value: "12", label: "Grade 12" }
+    ]),
+    createSelect("historyTopicFilter", "Topic", [
+      { value: "", label: "All topics" }
+    ]),
+    createSelect("historyModeFilter", "Mode", [
+      { value: "", label: "All modes" },
+      { value: "classic", label: "Classic Quiz" },
+      { value: "speed", label: "Speed Battle" }
+    ])
+  );
+
+  filters.appendChild(filterGrid);
+
+  const count = createTextElement("p", "muted", "");
+  count.id = "historyCount";
+  filters.appendChild(count);
+
+  const list = document.createElement("div");
+  list.id = "historyList";
+
+  section.append(header, filters, list);
+
+  ["historyGradeFilter", "historyTopicFilter", "historyModeFilter"]
+    .forEach((id) => {
+      $(id).addEventListener("change", renderHistory);
+    });
+}
+
+function updateTopicFilter() {
+  const select = $("historyTopicFilter");
+  if (!select) return;
+
+  const previous = select.value;
+
+  const topics = [
+    ...new Set(
+      historyGames
+        .map((game) => String(game.topic || "").trim())
+        .filter(Boolean)
+    )
+  ].sort((a, b) => a.localeCompare(b));
+
+  select.replaceChildren();
+
+  const all = document.createElement("option");
+  all.value = "";
+  all.textContent = "All topics";
+  select.appendChild(all);
+
+  topics.forEach((topic) => {
+    const option = document.createElement("option");
+    option.value = topic;
+    option.textContent = topic;
+    select.appendChild(option);
+  });
+
+  if (topics.includes(previous)) {
+    select.value = previous;
+  }
+}
+
+function getFilteredGames() {
+  const grade = $("historyGradeFilter")?.value || "";
+  const topic = $("historyTopicFilter")?.value || "";
+  const mode = $("historyModeFilter")?.value || "";
+
+  return historyGames.filter((game) => {
+    if (grade && String(game.grade) !== grade) return false;
+    if (topic && String(game.topic || "") !== topic) return false;
+    if (mode && String(game.mode || "") !== mode) return false;
+
+    return true;
+  });
+}
+
+function renderHistory() {
+  prepareHistorySection();
+  updateTopicFilter();
+
+  const list = $("historyList");
+  const count = $("historyCount");
+
+  list.replaceChildren();
+
+  const games = getFilteredGames();
+
+  count.textContent =
+    games.length + (games.length === 1 ? " completed game" : " completed games");
+
+  if (historyGames.length === 0) {
+    list.appendChild(
+      createTextElement(
+        "div",
+        "card muted",
+        "No completed games yet. Your finished games will appear here automatically."
+      )
+    );
+    return;
+  }
+
+  if (games.length === 0) {
+    list.appendChild(
+      createTextElement(
+        "div",
+        "card muted",
+        "No games match these filters. Try changing or clearing your filters."
+      )
+    );
+    return;
+  }
+
+  games.forEach((game) => {
+    const card = document.createElement("div");
+    card.className = "card";
+
+    const heading = document.createElement("div");
+    heading.className = "page-head-row";
+
+    const titleArea = document.createElement("div");
+
+    titleArea.appendChild(
+      createTextElement(
+        "h2",
+        "",
+        game.topic || "Untitled topic"
+      )
+    );
+
+    titleArea.appendChild(
+      createTextElement(
+        "p",
+        "muted",
+        "Grade " + (game.grade || "—") +
+        " · " + modeLabel(game.mode)
+      )
+    );
+
+    heading.appendChild(titleArea);
+
+    const detailsButton = document.createElement("button");
+    detailsButton.type = "button";
+    detailsButton.className = "btn small ghost";
+
+    const isSelected = selectedHistoryId === game.id;
+    detailsButton.textContent = isSelected ? "Hide Details" : "View Details";
+
+    detailsButton.addEventListener("click", () => {
+      selectedHistoryId = isSelected ? null : game.id;
+      renderHistory();
+    });
+
+    heading.appendChild(detailsButton);
+    card.appendChild(heading);
+
+    const info = document.createElement("div");
+    info.className = "toolbar-grid";
+
+    info.append(
+      createTextElement(
+        "p",
+        "",
+        "Finished: " + formatDate(game.finishedAt)
+      ),
+      createTextElement(
+        "p",
+        "",
+        "Questions: " + (Number(game.questionCount) || 0)
+      ),
+      createTextElement(
+        "p",
+        "",
+        "Timer: " + (Number(game.timer) || 0) + " seconds"
+      ),
+      createTextElement(
+        "p",
+        "",
+        "Participants: " + (Number(game.playerCount) || 0)
+      )
+    );
+
+    card.appendChild(info);
+
+    if (isSelected) {
+      card.appendChild(createPlayerDetails(game));
+    }
+
+    list.appendChild(card);
+  });
+}
+
+function createPlayerDetails(game) {
+  const wrapper = document.createElement("div");
+  wrapper.className = "card";
+
+  wrapper.appendChild(
+    createTextElement("h3", "", "Final Results")
+  );
+
+  const players = getPlayers(game);
+
+  if (players.length === 0) {
+    wrapper.appendChild(
+      createTextElement(
+        "p",
+        "muted",
+        "No participant details were saved for this game."
+      )
+    );
+
+    return wrapper;
+  }
+
+  const table = document.createElement("table");
+  table.className = "history-results-table";
+
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+
+  [
+    "Rank",
+    "Student",
+    "Section",
+    "Score",
+    "Correct",
+    "Answered"
+  ].forEach((label) => {
+    headerRow.appendChild(createTextElement("th", "", label));
+  });
+
+  thead.appendChild(headerRow);
+
+  const tbody = document.createElement("tbody");
+
+  players.forEach((player, index) => {
+    const row = document.createElement("tr");
+
+    const rank = player.rank || index + 1;
+
+    [
+      "#" + rank,
+      player.name,
+      player.section,
+      player.score,
+      player.correct,
+      player.answered
+    ].forEach((value) => {
+      row.appendChild(createTextElement("td", "", value));
+    });
+
+    tbody.appendChild(row);
+  });
+
+  table.append(thead, tbody);
+  wrapper.appendChild(table);
+
+  return wrapper;
+}
+
+// ============================================================
+// PHASE 6: DASHBOARD
+// ============================================================
+
+function renderDashboardStats() {
+  const uniqueStudents = new Set();
+  const uniqueSections = new Set();
+
+  historyGames.forEach((game) => {
+    Object.entries(game.players || {}).forEach(([uid, player]) => {
+      uniqueStudents.add(uid);
+
+      const section = String(player.section || "").trim();
+
+      if (section && section !== "No section") {
+        uniqueSections.add(section);
+      }
+    });
+  });
+
+  $("statGames").textContent = historyGames.length;
+  $("statStudents").textContent = uniqueStudents.size;
+
+  // Keep the existing settings section count.
+  $("statSections").textContent = classSections.length;
+}
+
+function renderDashboardHistory() {
+  const dashboard = $("sec-dashboard");
+
+  const cards = [...dashboard.querySelectorAll(".card")];
+
+  const recentCard = cards.find((card) =>
+    card.querySelector("h2")?.textContent.includes("Recent game sessions")
+  );
+
+  if (!recentCard) return;
+
+  const heading = recentCard.querySelector("h2");
+
+  recentCard.replaceChildren();
+
+  if (heading) {
+    recentCard.appendChild(heading);
+  } else {
+    recentCard.appendChild(
+      createTextElement("h2", "", "Recent game sessions")
+    );
+  }
+
+  if (historyGames.length === 0) {
+    recentCard.appendChild(
+      createTextElement(
+        "p",
+        "muted",
+        "No completed games yet. Your finished games will appear here."
+      )
+    );
+    return;
+  }
+
+  historyGames.slice(0, 5).forEach((game) => {
+    const row = document.createElement("div");
+    row.className = "list-row";
+
+    const info = document.createElement("div");
+
+    info.appendChild(
+      createTextElement(
+        "strong",
+        "",
+        game.topic || "Untitled topic"
+      )
+    );
+
+    info.appendChild(
+      createTextElement(
+        "p",
+        "muted small-text",
+        "Grade " + (game.grade || "—") +
+        " · " + modeLabel(game.mode) +
+        " · " + formatDate(game.finishedAt)
+      )
+    );
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "btn small ghost";
+    button.textContent = "View";
+
+    button.addEventListener("click", () => {
+      location.hash = "#history";
+      selectedHistoryId = game.id;
+      renderHistory();
+    });
+
+    row.append(info, button);
+    recentCard.appendChild(row);
+  });
+}
+
+// ============================================================
+// INITIAL HISTORY UI SETUP
+// ============================================================
+
+prepareHistorySection();
