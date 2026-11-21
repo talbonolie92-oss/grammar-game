@@ -5,6 +5,7 @@
 // - Navigation between the six sections
 // - Dashboard greeting and counts
 // - Settings: game defaults and class sections
+// - Starts and stops the Question Bank (js/questions.js, Phase 3)
 // ------------------------------------------------------------
 import { auth, db, configMissing } from "./firebase-config.js";
 import {
@@ -16,6 +17,7 @@ import {
   ref, onValue, get, set, update, remove, push
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { h, showScreen, cleanText } from "./common.js";
+import { startQuestionBank, stopQuestionBank } from "./questions.js";
 
 const $ = (id) => document.getElementById(id);
 
@@ -76,6 +78,7 @@ $("loginForm").addEventListener("submit", async (e) => {
 });
 
 async function logout() {
+  stopQuestionBank();
   if (unsubSettings) { unsubSettings(); unsubSettings = null; }
   await signOut(auth);
 }
@@ -84,6 +87,8 @@ $("deniedLogout").addEventListener("click", logout);
 
 onAuthStateChanged(auth, async (u) => {
   if (!u) {
+    stopQuestionBank();
+    if (unsubSettings) { unsubSettings(); unsubSettings = null; }
     user = null;
     $("password").value = "";
     showScreen("loginScreen");
@@ -122,6 +127,12 @@ function startApp() {
   editingId = null;
   $("appError").classList.add("hidden");
   showScreen("appScreen");
+
+  // Phase 3: the Question Bank also tells the dashboard how many questions exist.
+  $("statQuestions").textContent = "0";
+  startQuestionBank(user.uid, (count) => {
+    $("statQuestions").textContent = count;
+  });
 
   if (unsubSettings) unsubSettings();
   unsubSettings = onValue(
@@ -187,7 +198,7 @@ function renderHeaderInfo() {
   $("userName").textContent = name;
   $("welcome").textContent = "Welcome back, " + name;
   $("statSections").textContent = classSections.length;
-  // Phase 3 will fill statQuestions, Phase 6 will fill statGames and statStudents.
+  // statQuestions is filled by the Question Bank. Phase 6 will fill statGames and statStudents.
 }
 
 // ============================================================
