@@ -1,0 +1,75 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Join Game - Grammar Game</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body data-role="student">
+
+  <main class="screen center-screen">
+    <div class="card narrow">
+      <div class="login-brand">
+        <span class="school-logo lg">
+          <span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span>
+          <img src="assets/school-logo.png" alt="School logo" hidden>
+        </span>
+        <h1>Grammar Game</h1>
+        <p class="byline">by Teacher Nolie</p>
+        <p class="tagline">Learn. Practice. Complete.</p>
+      </div>
+
+      <div id="joinLoading">
+        <p class="muted center">Connecting to the game...</p>
+      </div>
+
+      <div id="joinError" class="notice hidden" role="alert"></div>
+
+      <section id="joinFormSection" class="hidden">
+        <h2>Join a game</h2>
+        <p id="gameDetails" class="muted"></p>
+
+        <form id="studentJoinForm">
+          <label>Your name
+            <input id="studentName" type="text" maxlength="40"
+              placeholder="Enter your name" required autocomplete="name">
+          </label>
+
+          <label>Class / Section
+            <input id="studentSection" type="text" maxlength="30"
+              placeholder="For example: 10-Newton" required>
+          </label>
+
+          <button id="joinGameBtn" class="btn block" type="submit">
+            Join game
+          </button>
+          <p id="joinMessage" class="status" role="status"></p>
+        </form>
+      </section>
+
+      <section id="waitingSection" class="hidden">
+        <h2>You're in!</h2>
+        <p class="muted">Your teacher has been notified that you joined.</p>
+
+        <div class="card">
+          <p class="muted small-text">Game PIN</p>
+          <h1 id="waitingPin" class="center"></h1>
+          <p id="waitingStudent" class="center"></p>
+          <p id="waitingGameStatus" class="muted center">
+            Waiting for your teacher to start the game...
+          </p>
+        </div>
+      </section>
+
+      <p class="muted center">
+        <a href="index.html">Back to home</a>
+      </p>
+    </div>
+  </main>
+
+  <script src="js/branding.js" defer></script>
+  <script type="module" src="js/student-join.js"></script>
+</body>
+</html>
