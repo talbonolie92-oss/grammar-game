@@ -1,6 +1,6 @@
 
 /* ------------------------------------------------------------
-   js/student-join.js — Phase 7
+   js/student-join.js — Phase 7 FIXED
    Student:
    - PIN joining and registration
    - Synchronized progression
@@ -8,6 +8,7 @@
    - Per-student question state
    - Answer submission and feedback
    - Countdown, scores and leaderboard
+   - Completed-student screen and final results
    ------------------------------------------------------------ */
 
 import { auth, db, configMissing } from "./firebase-config.js";
@@ -44,7 +45,6 @@ let studentSection = "";
 
 let playerAnswers = {};
 let currentQuestionIndex = null;
-let selectedChoice = null;
 let countdownInterval = null;
 
 let gameListener = null;
@@ -98,21 +98,38 @@ function showGameplay() {
 
 function showFinalResults() {
   stopCountdown();
+
   gamePlaySection.classList.add("hidden");
   waitingSection.classList.add("hidden");
   formSection.classList.add("hidden");
   resultsSection.classList.remove("hidden");
+
   $("finalStudentName").textContent = studentName;
 }
 
 function getQuestionState() {
-  return gameData?.progressionMode === "individual"
-    ? studentState
-    : gameData;
+  if (gameData?.progressionMode === "individual") {
+    if (!studentState) return null;
+
+    return {
+      ...studentState,
+      status: studentState.finished
+        ? "completed"
+        : gameData.status
+    };
+  }
+
+  return gameData;
 }
 
 function getQuestionIndex(state) {
   return Number(state?.currentQuestionIndex);
+}
+
+function disableAnswerButtons() {
+  document.querySelectorAll("#answerChoices button").forEach((button) => {
+    button.disabled = true;
+  });
 }
 
 function updateCountdown(state) {
@@ -153,28 +170,18 @@ function updateCountdown(state) {
   }
 }
 
-function disableAnswerButtons() {
-  document.querySelectorAll("#answerChoices button").forEach((button) => {
-    button.disabled = true;
-  });
-}
-
 function renderChoices(question, index, state) {
   const container = $("answerChoices");
-  $("answerStatus").className = "status center";
+  const status = $("answerStatus");
+
+  status.className = "status center";
   container.replaceChildren();
 
   const choices = Array.isArray(question.choices)
     ? question.choices
     : Object.values(question.choices || {});
 
-  selectedChoice = null;
-
   const existingAnswer = playerAnswers["q" + index];
-
-  if (existingAnswer) {
-    selectedChoice = Number(existingAnswer.choiceIndex);
-  }
 
   choices.forEach((choice, choiceIndex) => {
     const button = document.createElement("button");
@@ -184,6 +191,7 @@ function renderChoices(question, index, state) {
     button.style.display = "block";
     button.style.width = "100%";
     button.style.marginBottom = "10px";
+
     button.textContent =
       String.fromCharCode(65 + choiceIndex) + ". " + choice;
 
@@ -192,7 +200,7 @@ function renderChoices(question, index, state) {
       state.status !== "active" ||
       state.answerRevealed === true;
 
-    if (selectedChoice === choiceIndex) {
+    if (existingAnswer && Number(existingAnswer.choiceIndex) === choiceIndex) {
       button.classList.add("selected");
     }
 
@@ -204,26 +212,31 @@ function renderChoices(question, index, state) {
   });
 
   if (existingAnswer) {
-    $("answerStatus").textContent = "Your answer has been submitted.";
+    status.textContent = "Your answer has been submitted.";
     setPlayMessage("Your answer is locked. Wait for the answer.");
   } else {
-    $("answerStatus").textContent = "";
-    setPlayMessage(
-      state.status === "paused"
-        ? "The game is paused."
-        : "Choose your answer."
-    );
+    status.textContent = "";
+
+    if (state.status === "paused") {
+      setPlayMessage("The game is paused.");
+    } else if (state.status === "active") {
+      setPlayMessage("Choose your answer.");
+    } else {
+      setPlayMessage("Waiting for your teacher...");
+    }
   }
 
-  if (state.status === "paused" || state.answerRevealed === true) {
+  if (state.status !== "active" || state.answerRevealed === true) {
     disableAnswerButtons();
   }
 }
 
 async function submitAnswer(questionIndex, choiceIndex, clickedButton) {
-  if (!gameId || !studentUid) return;
+  if (!gameId || !studentUid || !gameData) return;
 
-  if (playerAnswers["q" + questionIndex]) {
+  const answerKey = "q" + questionIndex;
+
+  if (playerAnswers[answerKey]) {
     $("answerStatus").textContent =
       "You have already submitted an answer.";
     return;
@@ -234,21 +247,25 @@ async function submitAnswer(questionIndex, choiceIndex, clickedButton) {
   try {
     const individual = gameData.progressionMode === "individual";
 
-    const stateSnapshot = await get(
-      ref(
-        db,
-        individual
-          ? "gameStudentState/" + gameId + "/" + studentUid
-          : "games/" + gameId
-      )
+    const statePath = individual
+      ? "gameStudentState/" + gameId + "/" + studentUid
+      : "games/" + gameId;
+
+    const stateSnapshot = await get(ref(db, statePath));
+    const latestState = stateSnapshot.val();
+
+    const latestGameSnapshot = await get(
+      ref(db, "games/" + gameId)
     );
 
-    const latestState = stateSnapshot.val();
+    const latestGame = latestGameSnapshot.val();
 
     if (
       !latestState ||
-      latestState.status !== "active" ||
+      !latestGame ||
+      latestGame.status !== "active" ||
       latestState.answerRevealed === true ||
+      latestState.finished === true ||
       getQuestionIndex(latestState) !== questionIndex ||
       Date.now() > Number(latestState.answerDeadline)
     ) {
@@ -262,21 +279,31 @@ async function submitAnswer(questionIndex, choiceIndex, clickedButton) {
     };
 
     const answerPath =
-      "gameAnswers/" + gameId + "/" + studentUid + "/q" + questionIndex;
+      "gameAnswers/" + gameId + "/" + studentUid + "/" + answerKey;
 
     await set(ref(db, answerPath), answer);
 
-    playerAnswers["q" + questionIndex] = answer;
-    selectedChoice = choiceIndex;
+    playerAnswers[answerKey] = answer;
 
-    renderChoices(latestState.currentQuestion, questionIndex, latestState);
+    const normalizedState = {
+      ...latestState,
+      status: latestGame.status
+    };
+
+    renderChoices(
+      latestState.currentQuestion,
+      questionIndex,
+      normalizedState
+    );
 
     $("answerStatus").textContent = "Answer submitted successfully!";
     setPlayMessage("Your answer is locked. Wait for the answer.");
 
   } catch (error) {
     console.error("Answer submission error:", error);
+
     clickedButton.disabled = false;
+
     $("answerStatus").textContent =
       error.message || "Could not submit your answer.";
   }
@@ -291,7 +318,6 @@ function renderQuestion(state) {
 
   if (currentQuestionIndex !== index) {
     currentQuestionIndex = index;
-    selectedChoice = null;
   }
 
   showGameplay();
@@ -356,12 +382,35 @@ function showAnswerFeedback(state) {
   stopCountdown();
 }
 
+function showIndividualCompleted() {
+  stopCountdown();
+  showGameplay();
+
+  $("questionProgress").textContent = "Game completed";
+  $("liveQuestionText").textContent =
+    "You have completed all the questions!";
+
+  $("answerChoices").replaceChildren();
+
+  $("answerStatus").className = "status center good";
+  $("answerStatus").textContent =
+    "Great work! You have finished your individual quiz.";
+
+  $("questionTimer").textContent = "✓";
+
+  setPlayMessage(
+    "You are finished. You can view the leaderboard while waiting for the teacher to end the game."
+  );
+}
+
 function renderScore(scores) {
   const ownScore = scores && scores[studentUid];
+
   if (!ownScore) return;
 
   $("studentScore").textContent = Number(ownScore.score) || 0;
   $("finalStudentScore").textContent = Number(ownScore.score) || 0;
+
   $("finalStudentRank").textContent =
     "Your rank: #" + (ownScore.rank || "-");
 }
@@ -410,7 +459,10 @@ function listenToAnswers() {
       playerAnswers = snapshot.val() || {};
 
       const state = getQuestionState();
-      if (state?.currentQuestion) renderQuestion(state);
+
+      if (state?.currentQuestion) {
+        renderQuestion(state);
+      }
     },
     (error) => console.error("Answer listener error:", error)
   );
@@ -423,6 +475,7 @@ function listenToScores() {
     ref(db, "gameScores/" + gameId),
     (snapshot) => {
       const scores = snapshot.val() || {};
+
       renderScore(scores);
       renderLeaderboard(scores);
     },
@@ -438,28 +491,30 @@ function listenToStudentState() {
     (snapshot) => {
       studentState = snapshot.val();
 
-      if (gameData?.progressionMode === "individual") {
-        if (gameData.status === "finished") {
-          showFinalResults();
-        } else if (
-          studentState?.status === "finished" ||
-          studentState?.status === "completed"
-        ) {
-          stopCountdown();
-          gamePlaySection.classList.add("hidden");
-          $("gamePlayStatus").textContent =
-            "You have completed all the questions. Wait for the final results.";
-        } else if (
-          studentState?.currentQuestion &&
-          ["active", "paused"].includes(studentState.status)
-        ) {
-          renderQuestion(studentState);
-        }
+      if (gameData?.progressionMode !== "individual") return;
+
+      if (gameData.status === "finished") {
+        showFinalResults();
+        return;
+      }
+
+      if (studentState?.finished === true) {
+        showIndividualCompleted();
+        return;
+      }
+
+      if (
+        studentState?.currentQuestion &&
+        ["active", "paused"].includes(gameData.status)
+      ) {
+        renderQuestion(getQuestionState());
       }
     },
     (error) => {
       console.error("Student state listener error:", error);
-      showError("Unable to load your individual game progress. Please refresh.");
+      showError(
+        "Unable to load your individual game progress. Please refresh."
+      );
     }
   );
 }
@@ -488,12 +543,15 @@ function listenToGame() {
         $("waitingGameStatus").textContent =
           "Waiting for your teacher to start the game...";
 
-      } else if (gameData.status === "active" ||
-                 gameData.status === "paused") {
-
+      } else if (
+        gameData.status === "active" ||
+        gameData.status === "paused"
+      ) {
         if (gameData.progressionMode === "individual") {
-          if (studentState?.currentQuestion) {
-            renderQuestion(studentState);
+          if (studentState?.finished === true) {
+            showIndividualCompleted();
+          } else if (studentState?.currentQuestion) {
+            renderQuestion(getQuestionState());
           }
         } else {
           renderQuestion(gameData);
@@ -532,7 +590,9 @@ async function connectToGame() {
     const pinSnapshot = await get(ref(db, "gamePins/" + pin));
 
     if (!pinSnapshot.exists()) {
-      throw new Error("Game PIN not found. Please check the PIN with your teacher.");
+      throw new Error(
+        "Game PIN not found. Please check the PIN with your teacher."
+      );
     }
 
     const pinData = pinSnapshot.val();
