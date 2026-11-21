@@ -1,18 +1,26 @@
 
 /* ------------------------------------------------------------
-   js/game-host.js — Phase 4
-   Teacher: Create Game and manage the waiting lobby.
-   Private questions are stored separately from public game data.
+   js/game-host.js — Phase 5
+   Teacher controls:
+   - Create game and manage waiting lobby
+   - Start, pause, and resume game
+   - Publish questions
+   - Reveal answers
+   - Calculate scores and leaderboard
+   - Move to next question and end game
    ------------------------------------------------------------ */
 
 import { auth, db } from "./firebase-config.js";
+
 import {
   onAuthStateChanged
 } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+
 import {
   ref,
   get,
   set,
+  update,
   onValue,
   push,
   remove,
@@ -24,7 +32,10 @@ const $ = (id) => document.getElementById(id);
 let teacherUid = null;
 let questions = [];
 let currentGameId = null;
+let currentGameQuestions = [];
+let currentQuestionIndex = -1;
 let stopPlayersListener = null;
+let stopScoresListener = null;
 let gameBusy = false;
 
 const section = $("sec-create");
@@ -84,6 +95,7 @@ if (section) {
         <button id="createGameBtn" class="btn" type="submit">
           Create Game
         </button>
+
         <p id="gameFormMessage" class="status" role="status"></p>
       </form>
     </div>
@@ -121,6 +133,57 @@ if (section) {
       <p class="muted">Students who join will appear here.</p>
       <p><strong id="playerCount">0 students joined</strong></p>
       <div id="playerList" class="list"></div>
+
+      <hr>
+
+      <div id="gameControlPanel" class="hidden">
+        <h2>Game controls</h2>
+
+        <p id="gameControlMessage" class="status" role="status">
+          Waiting for you to start the game.
+        </p>
+
+        <div class="actions">
+          <button id="startGameBtn" class="btn" type="button">
+            Start Game
+          </button>
+
+          <button id="pauseGameBtn" class="btn ghost hidden" type="button">
+            Pause Game
+          </button>
+
+          <button id="resumeGameBtn" class="btn hidden" type="button">
+            Resume Game
+          </button>
+
+          <button id="revealAnswerBtn" class="btn ghost hidden" type="button">
+            Reveal Answer
+          </button>
+
+          <button id="nextQuestionBtn" class="btn hidden" type="button">
+            Next Question
+          </button>
+
+          <button id="endGameBtn" class="btn ghost hidden" type="button">
+            End Game
+          </button>
+        </div>
+
+        <div id="teacherQuestionPreview" class="card hidden">
+          <p class="muted" id="teacherQuestionNumber"></p>
+          <h3 id="teacherQuestionText"></h3>
+          <div id="teacherQuestionChoices"></div>
+          <p id="teacherCorrectAnswer" class="good hidden"></p>
+          <p id="teacherExplanation" class="muted"></p>
+        </div>
+
+        <div class="card">
+          <h3>Live leaderboard</h3>
+          <div id="teacherLeaderboard" class="list">
+            <p class="muted">Scores will appear after the first answer reveal.</p>
+          </div>
+        </div>
+      </div>
     </div>
   `;
 
@@ -129,6 +192,12 @@ if (section) {
     el.textContent = text;
     el.className = "status" + (error ? " bad" : " good");
   };
+
+  function controlMessage(text, error = false) {
+    const el = $("gameControlMessage");
+    el.textContent = text;
+    el.className = "status" + (error ? " bad" : " good");
+  }
 
   function showLoadMessage(text, error = false) {
     const el = $("gameLoadMessage");
@@ -156,8 +225,6 @@ if (section) {
         ? matches.length + " question(s) available for this selection."
         : "Select a grade and topic to see available questions.";
 
-    // Allow the teacher to enter up to 50.
-    // createGame() checks whether enough questions actually exist.
     $("gameQuestionCount").max = 50;
   }
 
@@ -246,6 +313,43 @@ if (section) {
     });
   }
 
+  function renderLeaderboard(scores) {
+    const list = $("teacherLeaderboard");
+    list.replaceChildren();
+
+    const entries = Object.entries(scores || {})
+      .map(([uid, score]) => ({ uid, ...score }))
+      .sort((a, b) =>
+        (Number(a.rank) || 999) - (Number(b.rank) || 999)
+      );
+
+    if (!entries.length) {
+      const empty = document.createElement("p");
+      empty.className = "muted";
+      empty.textContent = "Scores will appear after the first answer reveal.";
+      list.appendChild(empty);
+      return;
+    }
+
+    entries.forEach((student) => {
+      const row = document.createElement("div");
+      row.className = "list-row";
+
+      const name = document.createElement("strong");
+      name.textContent =
+        "#" + (student.rank || "-") + " " + student.name;
+
+      const details = document.createElement("span");
+      details.className = "muted";
+      details.textContent =
+        student.score + " points • " +
+        student.correct + " correct";
+
+      row.append(name, details);
+      list.appendChild(row);
+    });
+  }
+
   function listenToPlayers(gameId) {
     if (stopPlayersListener) stopPlayersListener();
 
@@ -258,6 +362,19 @@ if (section) {
           "Could not load the student lobby. Check Firebase rules.",
           true
         );
+      }
+    );
+  }
+
+  function listenToScores(gameId) {
+    if (stopScoresListener) stopScoresListener();
+
+    stopScoresListener = onValue(
+      ref(db, "gameScores/" + gameId),
+      (snapshot) => renderLeaderboard(snapshot.val() || {}),
+      (error) => {
+        console.error("Leaderboard listener error:", error);
+        controlMessage("Could not load the leaderboard.", true);
       }
     );
   }
@@ -279,6 +396,391 @@ if (section) {
     );
 
     return result.committed;
+  }
+
+  function showControls() {
+    $("gameControlPanel").classList.remove("hidden");
+    $("startGameBtn").classList.remove("hidden");
+  }
+
+  function hideButton(id) {
+    $(id).classList.add("hidden");
+  }
+
+  function showButton(id) {
+    $(id).classList.remove("hidden");
+  }
+
+  function renderQuestionPreview(question, index) {
+    $("teacherQuestionPreview").classList.remove("hidden");
+    $("teacherQuestionNumber").textContent =
+      "Question " + (index + 1) + " of " + currentGameQuestions.length;
+
+    $("teacherQuestionText").textContent = question.text;
+
+    const choices = $("teacherQuestionChoices");
+    choices.replaceChildren();
+
+    question.choices.forEach((choice, choiceIndex) => {
+      const row = document.createElement("p");
+      row.textContent =
+        String.fromCharCode(65 + choiceIndex) + ". " + choice;
+      choices.appendChild(row);
+    });
+
+    $("teacherCorrectAnswer").classList.add("hidden");
+    $("teacherExplanation").textContent = "";
+  }
+
+  function updateControlButtons(status, revealed) {
+    hideButton("startGameBtn");
+    hideButton("pauseGameBtn");
+    hideButton("resumeGameBtn");
+    hideButton("revealAnswerBtn");
+    hideButton("nextQuestionBtn");
+    hideButton("endGameBtn");
+
+    if (status === "waiting") {
+      showButton("startGameBtn");
+    } else if (status === "active") {
+      showButton("pauseGameBtn");
+      showButton("endGameBtn");
+
+      if (revealed) {
+        hideButton("pauseGameBtn");
+        showButton("nextQuestionBtn");
+      } else {
+        showButton("revealAnswerBtn");
+      }
+    } else if (status === "paused") {
+      showButton("resumeGameBtn");
+      showButton("endGameBtn");
+      if (!revealed) showButton("revealAnswerBtn");
+      if (revealed) showButton("nextQuestionBtn");
+    }
+  }
+
+  async function showQuestion(index) {
+    const question = currentGameQuestions[index];
+
+    if (!question) {
+      throw new Error("The requested question could not be found.");
+    }
+
+    const now = Date.now();
+    const deadline = now + Number($("gameTimer").value) * 1000;
+
+    await update(ref(db, "games/" + currentGameId), {
+      status: "active",
+      currentQuestionIndex: index,
+      currentQuestion: {
+        text: question.text,
+        choices: question.choices
+      },
+      questionStartedAt: now,
+      answerDeadline: deadline,
+      answerRevealed: false,
+      revealedCorrectIndex: null,
+      revealedExplanation: null,
+      pausedRemaining: null
+    });
+
+    currentQuestionIndex = index;
+
+    renderQuestionPreview(question, index);
+    updateControlButtons("active", false);
+
+    controlMessage(
+      "Question " + (index + 1) +
+      " is now live. Students can submit their answers."
+    );
+  }
+
+  async function startGame() {
+    if (!currentGameId) return;
+
+    try {
+      $("startGameBtn").disabled = true;
+      controlMessage("Preparing the game...");
+
+      const privateSnapshot = await get(
+        ref(db, "gamePrivate/" + currentGameId)
+      );
+
+      if (!privateSnapshot.exists()) {
+        throw new Error("Private questions could not be found.");
+      }
+
+      const privateData = privateSnapshot.val();
+
+      if (privateData.ownerUid !== teacherUid) {
+        throw new Error("You are not the owner of this game.");
+      }
+
+      currentGameQuestions = Object.values(
+        privateData.questions || {}
+      );
+
+      if (!currentGameQuestions.length) {
+        throw new Error("This game has no questions.");
+      }
+
+      await showQuestion(0);
+
+    } catch (error) {
+      console.error("Start game error:", error);
+      controlMessage(error.message || "Could not start the game.", true);
+    } finally {
+      $("startGameBtn").disabled = false;
+    }
+  }
+
+  async function pauseGame() {
+    try {
+      const snapshot = await get(
+        ref(db, "games/" + currentGameId)
+      );
+
+      const game = snapshot.val();
+
+      if (!game || game.status !== "active") return;
+
+      const remaining = Math.max(
+        0,
+        Math.ceil((Number(game.answerDeadline) - Date.now()) / 1000)
+      );
+
+      await update(ref(db, "games/" + currentGameId), {
+        status: "paused",
+        pausedRemaining: remaining
+      });
+
+      updateControlButtons("paused", game.answerRevealed === true);
+      controlMessage("Game paused.");
+
+    } catch (error) {
+      console.error("Pause error:", error);
+      controlMessage(error.message || "Could not pause the game.", true);
+    }
+  }
+
+  async function resumeGame() {
+    try {
+      const snapshot = await get(
+        ref(db, "games/" + currentGameId)
+      );
+
+      const game = snapshot.val();
+
+      if (!game || game.status !== "paused") return;
+
+      if (game.answerRevealed === true) {
+        updateControlButtons("paused", true);
+        return;
+      }
+
+      const now = Date.now();
+      const remaining = Math.max(0, Number(game.pausedRemaining) || 0);
+
+      await update(ref(db, "games/" + currentGameId), {
+        status: "active",
+        questionStartedAt: now,
+        answerDeadline: now + remaining * 1000,
+        pausedRemaining: null
+      });
+
+      updateControlButtons("active", false);
+      controlMessage("Game resumed.");
+
+    } catch (error) {
+      console.error("Resume error:", error);
+      controlMessage(error.message || "Could not resume the game.", true);
+    }
+  }
+
+  async function calculateScores(questionIndex, correctIndex) {
+    const [playersSnapshot, answersSnapshot, scoresSnapshot] =
+      await Promise.all([
+        get(ref(db, "gamePlayers/" + currentGameId)),
+        get(ref(db, "gameAnswers/" + currentGameId)),
+        get(ref(db, "gameScores/" + currentGameId))
+      ]);
+
+    const players = playersSnapshot.val() || {};
+    const answers = answersSnapshot.val() || {};
+    const oldScores = scoresSnapshot.val() || {};
+
+    const results = [];
+
+    for (const [uid, player] of Object.entries(players)) {
+      const previous = oldScores[uid] || {};
+      const studentAnswers = answers[uid] || {};
+
+      const answer =
+        studentAnswers["q" + questionIndex] ||
+        studentAnswers[String(questionIndex)];
+
+      let score = Number(previous.score) || 0;
+      let correct = Number(previous.correct) || 0;
+      let answered = Number(previous.answered) || 0;
+
+      if (answer && Number(answer.questionIndex) === questionIndex) {
+        answered++;
+
+        if (Number(answer.choiceIndex) === correctIndex) {
+          correct++;
+
+          let points = 100;
+
+          // Speed Battle gives a small bonus for faster correct answers.
+          if ($("gameMode").value === "speed") {
+            const gameSnapshot = await get(
+              ref(db, "games/" + currentGameId)
+            );
+
+            const deadline = Number(
+              gameSnapshot.val()?.answerDeadline || 0
+            );
+
+            const secondsRemaining = Math.max(
+              0,
+              Math.floor((deadline - Number(answer.submittedAt)) / 1000)
+            );
+
+            points += Math.min(100, secondsRemaining * 5);
+          }
+
+          score += points;
+        }
+      }
+
+      results.push({
+        uid,
+        name: String(player.name || "Student"),
+        section: String(player.section || ""),
+        score,
+        correct,
+        answered
+      });
+    }
+
+    results.sort((a, b) =>
+      b.score - a.score ||
+      b.correct - a.correct ||
+      a.name.localeCompare(b.name)
+    );
+
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+
+      await set(
+        ref(db, "gameScores/" + currentGameId + "/" + result.uid),
+        {
+          name: result.name,
+          section: result.section,
+          score: result.score,
+          correct: result.correct,
+          answered: result.answered,
+          rank: i + 1
+        }
+      );
+    }
+  }
+
+  async function revealAnswer() {
+    try {
+      const snapshot = await get(
+        ref(db, "games/" + currentGameId)
+      );
+
+      const game = snapshot.val();
+
+      if (!game || game.answerRevealed === true) return;
+
+      const question = currentGameQuestions[currentQuestionIndex];
+
+      if (!question) {
+        throw new Error("Current question is missing.");
+      }
+
+      controlMessage("Checking answers and calculating scores...");
+
+      await calculateScores(
+        currentQuestionIndex,
+        Number(question.correctIndex)
+      );
+
+      await update(ref(db, "games/" + currentGameId), {
+        answerRevealed: true,
+        revealedCorrectIndex: Number(question.correctIndex),
+        revealedExplanation: question.explanation || ""
+      });
+
+      const correctText = question.choices[question.correctIndex];
+
+      $("teacherCorrectAnswer").textContent =
+        "Correct answer: " + correctText;
+
+      $("teacherCorrectAnswer").classList.remove("hidden");
+
+      $("teacherExplanation").textContent =
+        question.explanation || "";
+
+      updateControlButtons(game.status, true);
+
+      controlMessage(
+        "Answer revealed. Scores and leaderboard updated."
+      );
+
+    } catch (error) {
+      console.error("Reveal answer error:", error);
+      controlMessage(error.message || "Could not reveal the answer.", true);
+    }
+  }
+
+  async function nextQuestion() {
+    try {
+      if (currentQuestionIndex + 1 >= currentGameQuestions.length) {
+        await endGame();
+        return;
+      }
+
+      await showQuestion(currentQuestionIndex + 1);
+
+    } catch (error) {
+      console.error("Next question error:", error);
+      controlMessage(error.message || "Could not load the next question.", true);
+    }
+  }
+
+  async function endGame() {
+    if (!currentGameId) return;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to end this game?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await update(ref(db, "games/" + currentGameId), {
+        status: "finished"
+      });
+
+      updateControlButtons("finished", false);
+      controlMessage("Game finished. Final scores are available.");
+
+      hideButton("startGameBtn");
+      hideButton("pauseGameBtn");
+      hideButton("resumeGameBtn");
+      hideButton("revealAnswerBtn");
+      hideButton("nextQuestionBtn");
+      hideButton("endGameBtn");
+
+    } catch (error) {
+      console.error("End game error:", error);
+      controlMessage(error.message || "Could not end the game.", true);
+    }
   }
 
   async function createGame(event) {
@@ -362,7 +864,6 @@ if (section) {
         createdAt: Date.now()
       };
 
-      // Stage 1: Reserve a unique six-digit PIN.
       currentStage = "Reserving game PIN";
 
       for (let attempt = 0; attempt < 15; attempt++) {
@@ -378,20 +879,18 @@ if (section) {
         throw new Error("Could not reserve a unique PIN. Please try again.");
       }
 
-      // Stage 2: Save public game information.
       currentStage = "Saving public game";
-
       await set(ref(db, "games/" + gameId), publicGame);
 
-      // Stage 3: Save questions and correct answers privately.
       currentStage = "Saving private questions";
-
       await set(ref(db, "gamePrivate/" + gameId), {
         ownerUid: teacherUid,
         questions: privateQuestions
       });
 
       currentGameId = gameId;
+      currentGameQuestions = [];
+      currentQuestionIndex = -1;
 
       const joinUrl = new URL(
         "student.html?pin=" + reservedPin,
@@ -408,10 +907,13 @@ if (section) {
       $("activeGameCard").classList.remove("hidden");
       $("activeGameCard").scrollIntoView({ behavior: "smooth" });
 
-      // Stage 4: Open the live student lobby.
+      $("gameControlPanel").classList.add("hidden");
+      $("teacherQuestionPreview").classList.add("hidden");
+
       currentStage = "Opening student lobby";
 
       listenToPlayers(gameId);
+      listenToScores(gameId);
 
       message("Game created successfully.");
 
@@ -472,6 +974,13 @@ if (section) {
       message("Copy failed. You can select the PIN manually.", true);
     }
   });
+
+  $("startGameBtn").addEventListener("click", startGame);
+  $("pauseGameBtn").addEventListener("click", pauseGame);
+  $("resumeGameBtn").addEventListener("click", resumeGame);
+  $("revealAnswerBtn").addEventListener("click", revealAnswer);
+  $("nextQuestionBtn").addEventListener("click", nextQuestion);
+  $("endGameBtn").addEventListener("click", endGame);
 
   onAuthStateChanged(auth, async (user) => {
     if (!user || user.isAnonymous) return;
