@@ -907,8 +907,8 @@ if (section) {
       $("activeGameCard").classList.remove("hidden");
       $("activeGameCard").scrollIntoView({ behavior: "smooth" });
 
-      $("gameControlPanel").classList.add("hidden");
-      $("teacherQuestionPreview").classList.add("hidden");
+showControls();
+$("teacherQuestionPreview").classList.add("hidden");
 
       currentStage = "Opening student lobby";
 
