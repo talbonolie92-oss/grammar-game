@@ -1,8 +1,10 @@
 
 /* ------------------------------------------------------------
-   js/student-join.js — Phase 7 FIXED
+   js/student-join.js — Phase 8
    Student:
-   - PIN joining and registration
+   - Manual six-digit PIN entry
+   - Automatic PIN detection from links and QR codes
+   - PIN validation and game connection
    - Synchronized progression
    - Individual progression
    - Per-student question state
@@ -28,18 +30,29 @@ const $ = (id) => document.getElementById(id);
 
 const loading = $("joinLoading");
 const errorBox = $("joinError");
+
+const pinSection = $("pinEntrySection");
+const pinForm = $("pinEntryForm");
+const pinInput = $("pinInput");
+const pinMessage = $("pinMessage");
+const findGameButton = $("findGameBtn");
+
 const formSection = $("joinFormSection");
 const waitingSection = $("waitingSection");
 const gamePlaySection = $("gamePlaySection");
 const resultsSection = $("resultsSection");
+
 const joinForm = $("studentJoinForm");
 const joinButton = $("joinGameBtn");
 const joinMessage = $("joinMessage");
+const changePinButton = $("changePinBtn");
 
 let studentUid = null;
 let gameId = null;
 let gameData = null;
 let studentState = null;
+
+let activePin = "";
 let studentName = "";
 let studentSection = "";
 
@@ -53,7 +66,7 @@ let answerListener = null;
 let scoreListener = null;
 
 const params = new URLSearchParams(window.location.search);
-const pin = (params.get("pin") || "").trim();
+const urlPin = (params.get("pin") || "").trim();
 
 function showError(message) {
   errorBox.textContent = message;
@@ -63,6 +76,11 @@ function showError(message) {
 function hideError() {
   errorBox.textContent = "";
   errorBox.classList.add("hidden");
+}
+
+function showPinMessage(message, error = false) {
+  pinMessage.textContent = message;
+  pinMessage.className = "status" + (error ? " bad" : " good");
 }
 
 function showMessage(message, error = false) {
@@ -82,14 +100,21 @@ function stopCountdown() {
 }
 
 function showWaiting(name, section) {
+  loading.classList.add("hidden");
+  pinSection.classList.add("hidden");
   formSection.classList.add("hidden");
+  gamePlaySection.classList.add("hidden");
+  resultsSection.classList.add("hidden");
+
   waitingSection.classList.remove("hidden");
-  $("waitingPin").textContent = pin;
+
+  $("waitingPin").textContent = activePin;
   $("waitingStudent").textContent = `${name} — ${section}`;
 }
 
 function showGameplay() {
   loading.classList.add("hidden");
+  pinSection.classList.add("hidden");
   formSection.classList.add("hidden");
   waitingSection.classList.add("hidden");
   resultsSection.classList.add("hidden");
@@ -99,9 +124,10 @@ function showGameplay() {
 function showFinalResults() {
   stopCountdown();
 
+  pinSection.classList.add("hidden");
+  formSection.classList.add("hidden");
   gamePlaySection.classList.add("hidden");
   waitingSection.classList.add("hidden");
-  formSection.classList.add("hidden");
   resultsSection.classList.remove("hidden");
 
   $("finalStudentName").textContent = studentName;
@@ -316,9 +342,7 @@ function renderQuestion(state) {
 
   if (!Number.isInteger(index) || index < 0) return;
 
-  if (currentQuestionIndex !== index) {
-    currentQuestionIndex = index;
-  }
+  currentQuestionIndex = index;
 
   showGameplay();
 
@@ -572,26 +596,40 @@ function listenToGame() {
   );
 }
 
-async function connectToGame() {
+async function connectToGame(pinValue) {
+  hideError();
+  showPinMessage("");
+
+  const requestedPin = String(pinValue || "").trim();
+
+  if (!/^\d{6}$/.test(requestedPin)) {
+    showPinMessage("Please enter a valid six-digit Game PIN.", true);
+    pinInput.focus();
+    return;
+  }
+
+  findGameButton.disabled = true;
+  findGameButton.textContent = "Checking PIN...";
+
   try {
     if (configMissing || !auth || !db) {
       throw new Error("Firebase is not configured correctly.");
     }
 
-    if (!/^\d{6}$/.test(pin)) {
-      throw new Error(
-        "Invalid Game PIN. Please use the six-digit PIN given by your teacher."
-      );
+    if (!auth.currentUser) {
+      const credential = await signInAnonymously(auth);
+      studentUid = credential.user.uid;
+    } else {
+      studentUid = auth.currentUser.uid;
     }
 
-    const credential = await signInAnonymously(auth);
-    studentUid = credential.user.uid;
-
-    const pinSnapshot = await get(ref(db, "gamePins/" + pin));
+    const pinSnapshot = await get(
+      ref(db, "gamePins/" + requestedPin)
+    );
 
     if (!pinSnapshot.exists()) {
       throw new Error(
-        "Game PIN not found. Please check the PIN with your teacher."
+        "Game PIN not found. Please check the six-digit PIN with your teacher."
       );
     }
 
@@ -601,32 +639,69 @@ async function connectToGame() {
       throw new Error("This Game PIN is invalid.");
     }
 
-    gameId = pinData.gameId;
+    const requestedGameId = pinData.gameId;
 
-    const gameSnapshot = await get(ref(db, "games/" + gameId));
+    const gameSnapshot = await get(
+      ref(db, "games/" + requestedGameId)
+    );
 
     if (!gameSnapshot.exists()) {
       throw new Error("This game is no longer available.");
     }
 
-    gameData = gameSnapshot.val();
+    const requestedGame = gameSnapshot.val();
 
-    if (gameData.status !== "waiting") {
+    if (requestedGame.status !== "waiting") {
       throw new Error("This game is no longer accepting students.");
     }
+
+    activePin = requestedPin;
+    gameId = requestedGameId;
+    gameData = requestedGame;
 
     $("gameDetails").textContent =
       `Grade ${gameData.grade} • ${gameData.topic} • ${gameData.questionCount} questions`;
 
-    loading.classList.add("hidden");
+    pinSection.classList.add("hidden");
     formSection.classList.remove("hidden");
 
+    showPinMessage("Game found successfully!");
+
   } catch (error) {
-    loading.classList.add("hidden");
+    console.error("Game connection error:", error);
     showError(error.message || "Unable to connect to the game.");
+    pinSection.classList.remove("hidden");
+    formSection.classList.add("hidden");
+
+  } finally {
+    findGameButton.disabled = false;
+    findGameButton.textContent = "Find Game";
   }
 }
 
+/* Manual PIN entry */
+pinForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await connectToGame(pinInput.value);
+});
+
+/* Return to PIN entry */
+changePinButton.addEventListener("click", () => {
+  hideError();
+  showMessage("");
+
+  formSection.classList.add("hidden");
+  pinSection.classList.remove("hidden");
+
+  pinInput.value = "";
+  pinInput.focus();
+
+  gameId = null;
+  gameData = null;
+  activePin = "";
+});
+
+/* Student registration */
 joinForm.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -634,7 +709,7 @@ joinForm.addEventListener("submit", async (event) => {
   showMessage("");
 
   if (!studentUid || !gameId || !gameData) {
-    showError("Game connection is missing. Please reload the page.");
+    showError("Game connection is missing. Please enter the Game PIN again.");
     return;
   }
 
@@ -682,4 +757,11 @@ joinForm.addEventListener("submit", async (event) => {
   }
 });
 
-connectToGame();
+/* Automatically connect when opened from a teacher link or QR code */
+if (urlPin) {
+  pinInput.value = urlPin;
+  connectToGame(urlPin);
+} else {
+  loading.classList.add("hidden");
+  pinSection.classList.remove("hidden");
+}
