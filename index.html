@@ -4,39 +4,68 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10172b">
   <title>Grammar Game by Teacher Nolie</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-  <main class="wrap">
+<body class="home-page">
+  <main class="wrap home-wrap">
+
     <header class="hero">
-      <span class="school-logo lg">
-        <span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span>
-        <img src="assets/school-logo.png" alt="School logo" hidden>
-      </span>
-      <h1>Grammar Game</h1>
-      <p class="byline">by Teacher Nolie</p>
-      <p class="tagline">Learn. Practice. Complete.</p>
-      <p class="audience muted">English grammar practice for Grades 10, 11 and 12.</p>
+      <div class="hero-brand">
+        <span class="school-logo sm">
+          <span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span>
+          <img src="assets/school-logo.png" alt="School logo" hidden>
+        </span>
+        <span class="brand-by">by Teacher Nolie</span>
+      </div>
+
+      <div class="hero-content">
+        <div class="hero-copy">
+          <span class="hero-eyebrow">YOUR ENGLISH LEARNING ADVENTURE</span>
+          <h1>Grammar Game</h1>
+          <p class="tagline">Learn. Practice. Complete.</p>
+          <p class="audience muted">
+            Build your English skills, challenge yourself, and have fun learning grammar.
+            For Grades 10, 11 and 12.
+          </p>
+        </div>
+
+        <div class="hero-visual">
+          <img
+            src="assets/grammar-game-hero.png"
+            alt="An orange 3D letter G standing on an open book"
+            fetchpriority="high"
+          >
+        </div>
+      </div>
     </header>
 
-    <section class="choose">
-    <div class="card">
-  <h2>Student</h2>
-  <p class="muted">Join a live game with a PIN, a link, or a QR code.</p>
-  <a class="btn block" href="student.html">Join a game</a>
-</div>
+    <section class="choose" aria-label="Choose your destination">
+      <div class="card student-card">
+        <div class="home-card-icon" aria-hidden="true">🎮</div>
+        <span class="home-card-label">FOR STUDENTS</span>
+        <h2>Ready to play?</h2>
+        <p class="muted">Join a live grammar game using a PIN, a link, or a QR code.</p>
+        <a class="btn block" href="student.html">Join a game <span aria-hidden="true">→</span></a>
+      </div>
 
-      <div class="card">
-        <h2>Teacher</h2>
-        <p class="muted">Manage questions, host games, and review reports.</p>
-        <a class="btn block" href="teacher.html">Teacher login</a>
+      <div class="card teacher-card">
+        <div class="home-card-icon" aria-hidden="true">📚</div>
+        <span class="home-card-label">FOR TEACHERS</span>
+        <h2>Your classroom, your game.</h2>
+        <p class="muted">Manage questions, host games, and review student performance.</p>
+        <a class="btn block ghost" href="teacher.html">Teacher login <span aria-hidden="true">→</span></a>
       </div>
     </section>
 
-    <p class="center muted" style="margin-top: 28px">
-      Setting up? <a href="setup-check.html">Run the setup check</a>
-    </p>
+    <footer class="home-footer">
+      <p class="center muted">
+        Setting up? <a href="setup-check.html">Run the setup check</a>
+      </p>
+      <p class="center muted home-footer-note">Learn something new. One question at a time.</p>
+    </footer>
+
   </main>
 
   <script src="js/branding.js" defer></script>
