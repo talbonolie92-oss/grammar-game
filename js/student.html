@@ -4,131 +4,228 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#142b4a">
   <title>Grammar Game - Student</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body data-role="student">
 
-  <main class="screen center-screen">
-    <div class="card narrow">
+  <main class="screen center-screen student-screen">
+    <div class="card narrow student-container">
 
-      <div class="login-brand">
+      <!-- BRANDING -->
+      <header class="login-brand student-brand">
         <span class="school-logo lg">
           <span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span>
           <img src="assets/school-logo.png" alt="School logo" hidden>
         </span>
+
         <h1>Grammar Game</h1>
         <p class="byline">by Teacher Nolie</p>
         <p class="tagline">Learn. Practice. Complete.</p>
-      </div>
+      </header>
 
       <!-- LOADING -->
-      <div id="joinLoading">
+      <div id="joinLoading" class="student-loading">
         <p class="muted center">Connecting to the game...</p>
       </div>
 
       <!-- ERROR -->
-      <div id="joinError" class="notice hidden" role="alert"></div>
+      <div
+        id="joinError"
+        class="notice hidden"
+        role="alert">
+      </div>
 
       <!-- JOIN FORM -->
-      <section id="joinFormSection" class="hidden">
-        <h2>Join a game</h2>
-        <p id="gameDetails" class="muted"></p>
+      <section id="joinFormSection" class="hidden student-panel">
 
-        <form id="studentJoinForm">
-          <label>Your name
-            <input id="studentName" type="text" maxlength="40"
-              placeholder="Enter your name" required autocomplete="name">
-          </label>
+        <div class="student-section-heading">
+          <p class="small-text muted">WELCOME, STUDENT!</p>
+          <h2>Join the Game</h2>
+          <p class="muted">Enter your details to join your classroom game.</p>
+        </div>
 
-          <label>Class / Section
-            <input id="studentSection" type="text" maxlength="30"
-              placeholder="For example: 10-Newton" required>
-          </label>
+        <div class="card student-game-details">
+          <p id="gameDetails" class="muted center"></p>
+        </div>
 
-          <button id="joinGameBtn" class="btn block" type="submit">
-            Join game
+        <form id="studentJoinForm" class="student-form">
+
+          <label for="studentName">Your name</label>
+          <input
+            id="studentName"
+            type="text"
+            maxlength="40"
+            placeholder="Enter your full name"
+            required
+            autocomplete="name">
+
+          <label for="studentSection">Class / Section</label>
+          <input
+            id="studentSection"
+            type="text"
+            maxlength="30"
+            placeholder="For example: 10-Newton"
+            required>
+
+          <button
+            id="joinGameBtn"
+            class="btn block student-primary-btn"
+            type="submit">
+            Join Game
           </button>
 
-          <p id="joinMessage" class="status" role="status"></p>
+          <p id="joinMessage" class="status center" role="status"></p>
+
         </form>
       </section>
 
       <!-- WAITING ROOM -->
-      <section id="waitingSection" class="hidden">
-        <h2>You're in!</h2>
-        <p class="muted">Your teacher has been notified that you joined.</p>
+      <section id="waitingSection" class="hidden student-panel">
 
-        <div class="card">
-          <p class="muted small-text">Game PIN</p>
-          <h1 id="waitingPin" class="center"></h1>
-          <p id="waitingStudent" class="center"></p>
-          <p id="waitingGameStatus" class="muted center">
-            Waiting for your teacher to start the game...
+        <div class="student-section-heading center">
+          <div class="student-status-icon">✓</div>
+          <h2>You're In!</h2>
+          <p class="muted">
+            You've successfully joined the game.
           </p>
         </div>
-      </section>
 
-      <!-- LIVE QUIZ -->
-      <section id="gamePlaySection" class="hidden">
+        <div class="card student-waiting-card">
 
-        <div class="card">
-          <p class="muted center">GAME IN PROGRESS</p>
+          <p class="muted small-text center">YOUR GAME PIN</p>
 
-          <div class="center">
-            <h2 id="questionProgress">Question 1</h2>
-            <h1 id="questionTimer">20</h1>
-            <p class="muted small-text">Seconds remaining</p>
-          </div>
+          <h1 id="waitingPin" class="center student-pin"></h1>
 
           <div class="divider"></div>
 
-          <h2 id="liveQuestionText">Your question will appear here.</h2>
+          <p id="waitingStudent" class="center student-player-name"></p>
 
-          <div id="answerChoices">
-            <!-- Answer buttons will be created by JavaScript. -->
+          <div class="student-waiting-message">
+            <p id="waitingGameStatus" class="muted center">
+              Waiting for your teacher to start the game...
+            </p>
           </div>
 
-          <p id="answerStatus" class="status center" role="status"></p>
-
-          <p id="gamePlayStatus" class="muted center">
-            Choose your answer.
-          </p>
         </div>
 
-        <div class="card">
-          <p class="muted small-text">YOUR SCORE</p>
-          <h2 id="studentScore" class="center">0</h2>
+        <p class="muted center small-text">
+          Stay on this page. The game will begin when your teacher starts it.
+        </p>
+
+      </section>
+
+      <!-- LIVE QUIZ -->
+      <section id="gamePlaySection" class="hidden student-panel">
+
+        <!-- QUESTION HEADER -->
+        <div class="student-quiz-header">
+
+          <div class="student-quiz-progress">
+            <p class="muted small-text">YOUR PROGRESS</p>
+            <h2 id="questionProgress">Question 1</h2>
+          </div>
+
+          <div class="student-timer">
+            <h1 id="questionTimer">20</h1>
+            <p class="muted small-text">SECONDS LEFT</p>
+          </div>
+
+        </div>
+
+        <!-- QUESTION -->
+        <div class="card student-question-card">
+
+          <p class="muted small-text">READ CAREFULLY</p>
+
+          <h2 id="liveQuestionText">
+            Your question will appear here.
+          </h2>
+
+          <div class="divider"></div>
+
+          <!-- ANSWER OPTIONS ARE GENERATED BY JAVASCRIPT -->
+          <div id="answerChoices" class="student-answer-choices">
+          </div>
+
+          <p
+            id="answerStatus"
+            class="status center student-answer-status"
+            role="status">
+          </p>
+
+          <p
+            id="gamePlayStatus"
+            class="muted center student-game-status">
+            Choose your answer.
+          </p>
+
+        </div>
+
+        <!-- SCORE -->
+        <div class="card student-score-card">
+
+          <div>
+            <p class="muted small-text">YOUR SCORE</p>
+            <h2 id="studentScore">0</h2>
+          </div>
+
+          <div class="student-score-icon">★</div>
+
         </div>
 
       </section>
 
       <!-- RESULTS -->
-      <section id="resultsSection" class="hidden">
+      <section id="resultsSection" class="hidden student-panel">
 
-        <div class="card center">
+        <div class="card center student-results-card">
+
+          <div class="student-results-icon">🏆</div>
+
+          <p class="muted small-text">GAME COMPLETED</p>
+
           <h2>Game Finished!</h2>
-          <p class="muted">Here are your final results.</p>
 
-          <h1 id="finalStudentScore">0</h1>
-          <p class="muted">Your final score</p>
+          <p class="muted">
+            Great job! Here are your final results.
+          </p>
 
-          <p id="finalStudentName"></p>
+          <div class="student-final-score">
+            <h1 id="finalStudentScore">0</h1>
+            <p class="muted">YOUR FINAL SCORE</p>
+          </div>
+
+          <p id="finalStudentName" class="student-player-name"></p>
+
           <p id="finalStudentRank" class="muted"></p>
+
         </div>
 
-        <div class="card">
-          <h2 class="center">Leaderboard</h2>
+        <!-- LEADERBOARD -->
+        <div class="card student-leaderboard-card">
+
+          <div class="center">
+            <h2>Leaderboard</h2>
+            <p class="muted small-text">
+              Final game standings
+            </p>
+          </div>
+
           <div id="studentLeaderboard">
             <!-- Leaderboard will be created by JavaScript. -->
           </div>
+
         </div>
 
       </section>
 
-      <p class="muted center">
-        <a href="index.html">Back to home</a>
-      </p>
+      <!-- FOOTER -->
+      <footer class="student-footer">
+        <a href="index.html">Back to Home</a>
+      </footer>
 
     </div>
   </main>
