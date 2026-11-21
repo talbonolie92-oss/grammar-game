@@ -157,6 +157,9 @@ function disableAnswerButtons() {
 
 function renderChoices(question, index, game) {
   const container = $("answerChoices");
+
+   $("answerStatus").className = "status center";
+   
   container.replaceChildren();
 
   const choices = Array.isArray(question.choices)
