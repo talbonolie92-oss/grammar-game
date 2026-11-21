@@ -5,65 +5,72 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#10172b">
-  <title>Grammar Game by Teacher Nolie</title>
+  <title>Grammar Game</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
 <body class="home-page">
+
   <main class="wrap home-wrap">
 
     <header class="hero">
+
+      <!-- School institutional logo -->
       <div class="hero-brand">
         <span class="school-logo sm">
-          <span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span>
-          <img src="assets/school-logo.png" alt="School logo" hidden>
+          <img src="assets/school-logo.png" alt="School logo">
         </span>
-        <span class="brand-by">by Teacher Nolie</span>
       </div>
 
       <div class="hero-content">
-        <div class="hero-copy">
-  <h1>Grammar Game</h1>
-  <p class="hero-credit">by Teacher Nolie</p>
-  <p class="tagline">Learn. Practice. Apply.</p>
-</div>
 
+        <!-- Main title and creator credit -->
+        <div class="hero-copy">
+          <h1>Grammar Game</h1>
+          <p class="hero-credit">by Teacher Nolie</p>
+          <p class="tagline">Learn. Practice. Complete.</p>
+        </div>
+
+        <!-- Main Grammar Game illustration -->
         <div class="hero-visual">
           <img
             src="assets/grammar-game-hero.png"
-            alt="An orange 3D letter G standing on an open book"
+            alt="Grammar Game logo featuring an orange G and an open book"
             fetchpriority="high"
           >
         </div>
+
       </div>
     </header>
 
     <section class="choose" aria-label="Choose your destination">
+
       <div class="card student-card">
         <div class="home-card-icon" aria-hidden="true">🎮</div>
-        <span class="home-card-label">FOR STUDENTS</span>
+        <span class="home-card-label">STUDENT</span>
         <h2>Ready to play?</h2>
-        <p class="muted">Join a live grammar game using a PIN, a link, or a QR code.</p>
-        <a class="btn block" href="student.html">Join a game <span aria-hidden="true">→</span></a>
+        <p class="muted">Join a live grammar game.</p>
+        <a class="btn block" href="student.html">Join a game →</a>
       </div>
 
       <div class="card teacher-card">
         <div class="home-card-icon" aria-hidden="true">📚</div>
-        <span class="home-card-label">FOR TEACHERS</span>
-        <h2>Your classroom, your game.</h2>
-        <p class="muted">Manage questions, host games, and review student performance.</p>
-        <a class="btn block ghost" href="teacher.html">Teacher login <span aria-hidden="true">→</span></a>
+        <span class="home-card-label">TEACHER</span>
+        <h2>Teacher Dashboard</h2>
+        <p class="muted">Manage games and student performance.</p>
+        <a class="btn block ghost" href="teacher.html">Teacher login →</a>
       </div>
+
     </section>
 
     <footer class="home-footer">
       <p class="center muted">
-        Setting up? <a href="setup-check.html">Run the setup check</a>
+        <a href="setup-check.html">Setup check</a>
       </p>
-      <p class="center muted home-footer-note">Learn something new. One question at a time.</p>
     </footer>
 
   </main>
 
   <script src="js/branding.js" defer></script>
+
 </body>
 </html>
