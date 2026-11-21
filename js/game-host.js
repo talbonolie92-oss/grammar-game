@@ -598,94 +598,98 @@ if (section) {
     }
   }
 
-  async function calculateScores(questionIndex, correctIndex) {
-    const [playersSnapshot, answersSnapshot, scoresSnapshot] =
-      await Promise.all([
-        get(ref(db, "gamePlayers/" + currentGameId)),
-        get(ref(db, "gameAnswers/" + currentGameId)),
-        get(ref(db, "gameScores/" + currentGameId))
-      ]);
 
-    const players = playersSnapshot.val() || {};
-    const answers = answersSnapshot.val() || {};
-    const oldScores = scoresSnapshot.val() || {};
+async function calculateScores(questionIndex, correctIndex) {
+  const playersSnapshot = await get(
+    ref(db, "gamePlayers/" + currentGameId)
+  );
 
-    const results = [];
+  const answersSnapshot = await get(
+    ref(db, "gameAnswers/" + currentGameId)
+  );
 
-    for (const [uid, player] of Object.entries(players)) {
-      const previous = oldScores[uid] || {};
-      const studentAnswers = answers[uid] || {};
+  const scoresSnapshot = await get(
+    ref(db, "gameScores/" + currentGameId)
+  );
 
-      const answer =
-        studentAnswers["q" + questionIndex] ||
-        studentAnswers[String(questionIndex)];
+  const gameSnapshot = await get(
+    ref(db, "games/" + currentGameId)
+  );
 
-      let score = Number(previous.score) || 0;
-      let correct = Number(previous.correct) || 0;
-      let answered = Number(previous.answered) || 0;
+  const players = playersSnapshot.val() || {};
+  const answers = answersSnapshot.val() || {};
+  const previousScores = scoresSnapshot.val() || {};
+  const game = gameSnapshot.val() || {};
 
-      if (answer && Number(answer.questionIndex) === questionIndex) {
-        answered++;
+  const answerDeadline = Number(game.answerDeadline) || 0;
+  const mode = game.mode;
 
-        if (Number(answer.choiceIndex) === correctIndex) {
-          correct++;
+  const updatedScores = {};
 
-          let points = 100;
+  for (const [uid, player] of Object.entries(players)) {
+    const previous = previousScores[uid] || {};
 
-          // Speed Battle gives a small bonus for faster correct answers.
-          if ($("gameMode").value === "speed") {
-            const gameSnapshot = await get(
-              ref(db, "games/" + currentGameId)
-            );
+    const oldScore = Number(previous.score) || 0;
+    const oldCorrect = Number(previous.correct) || 0;
+    const oldAnswered = Number(previous.answered) || 0;
 
-            const deadline = Number(
-              gameSnapshot.val()?.answerDeadline || 0
-            );
+    const answer =
+      answers[uid]?.["q" + questionIndex] ||
+      answers[uid]?.[String(questionIndex)];
 
-            const secondsRemaining = Math.max(
-              0,
-              Math.floor((deadline - Number(answer.submittedAt)) / 1000)
-            );
+    let points = 0;
+    let correct = 0;
+    let answered = 0;
 
-            points += Math.min(100, secondsRemaining * 5);
-          }
+    if (answer) {
+      answered = 1;
 
-          score += points;
+      const choiceIndex = Number(answer.choiceIndex);
+      const submittedAt = Number(answer.submittedAt) || 0;
+
+      const submittedOnTime =
+        submittedAt > 0 &&
+        answerDeadline > 0 &&
+        submittedAt <= answerDeadline;
+
+      if (submittedOnTime && choiceIndex === correctIndex) {
+        correct = 1;
+        points = 100;
+
+        if (mode === "speed") {
+          const secondsRemaining = Math.max(
+            0,
+            Math.floor((answerDeadline - submittedAt) / 1000)
+          );
+
+          points += Math.min(100, secondsRemaining * 5);
         }
       }
-
-      results.push({
-        uid,
-        name: String(player.name || "Student"),
-        section: String(player.section || ""),
-        score,
-        correct,
-        answered
-      });
     }
 
-    results.sort((a, b) =>
-      b.score - a.score ||
-      b.correct - a.correct ||
-      a.name.localeCompare(b.name)
-    );
-
-    for (let i = 0; i < results.length; i++) {
-      const result = results[i];
-
-      await set(
-        ref(db, "gameScores/" + currentGameId + "/" + result.uid),
-        {
-          name: result.name,
-          section: result.section,
-          score: result.score,
-          correct: result.correct,
-          answered: result.answered,
-          rank: i + 1
-        }
-      );
-    }
+    updatedScores[uid] = {
+      name: player.name,
+      section: player.section,
+      score: oldScore + points,
+      correct: oldCorrect + correct,
+      answered: oldAnswered + answered
+    };
   }
+
+  const ranked = Object.entries(updatedScores).sort(
+    (a, b) => b[1].score - a[1].score
+  );
+
+  ranked.forEach(([uid, score], index) => {
+    score.rank = index + 1;
+  });
+
+  await set(
+    ref(db, "gameScores/" + currentGameId),
+    updatedScores
+  );
+}
+
 
   async function revealAnswer() {
     try {
