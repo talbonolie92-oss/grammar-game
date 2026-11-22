@@ -2316,3 +2316,109 @@ button {
     padding: 20px 14px;
   }
 }
+/* ============================================================
+   PHASE 8 — STUDENT JOIN SCREEN REDESIGN
+   ============================================================ */
+
+#pinEntrySection,
+#joinFormSection {
+  padding: 22px 0;
+}
+
+#pinEntrySection .student-section-heading,
+#joinFormSection .student-section-heading {
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+#pinEntryForm,
+#studentJoinForm {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#pinInput {
+  min-height: 68px;
+  border: 2px solid #465b80;
+  border-radius: 16px;
+  background: #17233c;
+  color: var(--orange);
+  font-size: 2rem;
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#pinInput:focus,
+#studentName:focus,
+#studentSection:focus {
+  border-color: var(--orange);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(255, 155, 66, 0.13);
+}
+
+#studentName,
+#studentSection {
+  min-height: 52px;
+  padding: 13px 15px;
+  border: 1px solid #465b80;
+  border-radius: 12px;
+  background: #17233c;
+  color: #ffffff;
+  font-size: 1rem;
+}
+
+#findGameBtn,
+#joinGameBtn {
+  min-height: 54px;
+  border-radius: 13px;
+  font-size: 1rem;
+  font-weight: 850;
+}
+
+.student-game-details {
+  padding: 20px;
+  margin: 18px 0;
+  border: 1px solid #405274;
+  border-radius: 17px;
+  background: linear-gradient(145deg, #263656, #1a2743);
+}
+
+#pinMessage,
+#joinMessage,
+#joinError {
+  margin-top: 12px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+#joinLoading {
+  padding: 20px;
+  color: var(--teal);
+  text-align: center;
+  font-weight: 750;
+}
+
+#changePinBtn {
+  margin-top: 12px;
+}
+
+@media (max-width: 600px) {
+  #pinEntrySection,
+  #joinFormSection {
+    padding: 14px 0;
+  }
+
+  #pinInput {
+    min-height: 62px;
+    font-size: 1.7rem;
+  }
+
+  .student-game-details {
+    padding: 16px;
+  }
+}
