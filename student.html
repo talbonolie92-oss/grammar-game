@@ -8,34 +8,46 @@
   <title>Join Game - Grammar Game</title>
   <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body data-role="student">
 
-  <main class="screen center-screen">
-    <div class="card narrow">
+  <main class="screen center-screen student-screen">
+    <div class="student-container">
 
-      <div class="login-brand">
+      <!-- BRANDING -->
+      <header class="login-brand student-brand">
         <span class="school-logo lg">
           <span class="logo-placeholder" role="img" aria-label="School logo placeholder">Logo</span>
           <img src="assets/school-logo.png" alt="School logo" hidden>
         </span>
+
         <h1>Grammar Game</h1>
         <p class="byline">by Teacher Nolie</p>
         <p class="tagline">Learn. Practice. Complete.</p>
-      </div>
+      </header>
 
-      <div id="joinLoading" class="hidden">
+      <!-- LOADING -->
+      <div id="joinLoading" class="hidden student-loading">
         <p class="muted center">Connecting to the game...</p>
       </div>
 
+      <!-- GENERAL ERROR -->
       <div id="joinError" class="notice hidden" role="alert"></div>
 
-      <!-- Enter Game PIN -->
+      <!-- ENTER GAME PIN -->
       <section id="pinEntrySection">
-        <h2>Join a game</h2>
-        <p class="muted">Enter the six-digit Game PIN provided by your teacher.</p>
 
-        <form id="pinEntryForm">
-          <label>Game PIN
+        <div class="student-section-heading">
+          <p class="small-text">LET'S PLAY</p>
+          <h2>Join a game</h2>
+          <p class="muted">
+            Enter the six-digit Game PIN provided by your teacher.
+          </p>
+        </div>
+
+        <form id="pinEntryForm" class="student-form">
+
+          <label for="pinInput">Game PIN
             <input
               id="pinInput"
               type="text"
@@ -49,21 +61,31 @@
             >
           </label>
 
-          <button id="findGameBtn" class="btn block" type="submit">
+          <button
+            id="findGameBtn"
+            class="btn block student-primary-btn"
+            type="submit"
+          >
             Find Game
           </button>
 
-          <p id="pinMessage" class="status" role="status"></p>
+          <p id="pinMessage" class="status center" role="status"></p>
+
         </form>
       </section>
 
-      <!-- Student Registration -->
+      <!-- STUDENT REGISTRATION -->
       <section id="joinFormSection" class="hidden">
-        <h2>You're almost there!</h2>
-        <p id="gameDetails" class="muted"></p>
 
-        <form id="studentJoinForm">
-          <label>Your name
+        <div class="student-section-heading">
+          <p class="small-text">ONE MORE STEP</p>
+          <h2>You're almost there!</h2>
+          <p id="gameDetails" class="muted student-game-details"></p>
+        </div>
+
+        <form id="studentJoinForm" class="student-form">
+
+          <label for="studentName">Your name
             <input
               id="studentName"
               type="text"
@@ -74,7 +96,7 @@
             >
           </label>
 
-          <label>Class / Section
+          <label for="studentSection">Class / Section
             <input
               id="studentSection"
               type="text"
@@ -84,80 +106,173 @@
             >
           </label>
 
-          <button id="joinGameBtn" class="btn block" type="submit">
-            Join game
+          <button
+            id="joinGameBtn"
+            class="btn block student-primary-btn"
+            type="submit"
+          >
+            Join Game
           </button>
 
-          <button id="changePinBtn" class="btn ghost block" type="button">
+          <button
+            id="changePinBtn"
+            class="btn ghost block"
+            type="button"
+          >
             Use a different PIN
           </button>
 
-          <p id="joinMessage" class="status" role="status"></p>
+          <p id="joinMessage" class="status center" role="status"></p>
+
         </form>
       </section>
 
-      <!-- Waiting Room -->
+      <!-- WAITING ROOM -->
       <section id="waitingSection" class="hidden">
-        <h2>You're in!</h2>
-        <p class="muted">Your teacher has been notified that you joined.</p>
 
-        <div class="card">
-          <p class="muted small-text">Game PIN</p>
-          <h1 id="waitingPin" class="center"></h1>
-          <p id="waitingStudent" class="center"></p>
-          <p id="waitingGameStatus" class="muted center">
-            Waiting for your teacher to start the game...
-          </p>
-        </div>
-      </section>
-
-      <!-- Live Gameplay -->
-      <section id="gamePlaySection" class="hidden">
-        <div class="row">
-          <p id="questionProgress" class="muted">Question 1</p>
+        <div class="student-section-heading center">
+          <div class="student-status-icon">✓</div>
+          <p class="small-text">SUCCESSFULLY JOINED</p>
+          <h2>You're in!</h2>
           <p class="muted">
-            Time: <strong id="questionTimer">--</strong>s
+            Your teacher has been notified that you joined.
           </p>
         </div>
 
-        <div class="card">
-          <h2 id="liveQuestionText">Question will appear here.</h2>
-        </div>
+        <div class="card student-waiting-card center">
 
-        <div id="answerChoices"></div>
-        <p id="answerStatus" class="status center" role="status"></p>
-        <p id="gamePlayStatus" class="muted center" role="status">
-          Choose your answer.
-        </p>
+          <p class="muted small-text">YOUR GAME PIN</p>
 
-        <div class="card center">
-          <p class="muted small-text">Your Score</p>
-          <h2 id="studentScore">0</h2>
+          <h1 id="waitingPin" class="student-pin"></h1>
+
+          <p id="waitingStudent" class="student-player-name"></p>
+
+          <div class="student-waiting-message">
+            <p id="waitingGameStatus" class="muted">
+              Waiting for your teacher to start the game...
+            </p>
+          </div>
+
         </div>
       </section>
 
-      <!-- Final Results -->
-      <section id="resultsSection" class="hidden">
-        <h2 class="center">Game Completed!</h2>
-        <p class="muted center">Well done for participating!</p>
+      <!-- LIVE GAMEPLAY -->
+      <section id="gamePlaySection" class="hidden">
 
-        <div class="card center">
-          <p class="muted small-text">Student</p>
+        <!-- QUESTION HEADER -->
+        <div class="student-quiz-header">
+
+          <div class="student-quiz-progress">
+            <p class="small-text muted">YOUR PROGRESS</p>
+            <h2 id="questionProgress">Question 1</h2>
+          </div>
+
+          <div class="student-timer">
+            <p>TIME LEFT</p>
+            <h1 id="questionTimer">--</h1>
+          </div>
+
+        </div>
+
+        <!-- QUESTION -->
+        <div class="card student-question-card">
+
+          <p class="small-text">QUESTION</p>
+
+          <h2 id="liveQuestionText">
+            Question will appear here.
+          </h2>
+
+          <!-- ANSWER CHOICES -->
+          <div
+            id="answerChoices"
+            class="student-answer-choices"
+          ></div>
+
+          <p
+            id="answerStatus"
+            class="status center student-answer-status"
+            role="status"
+          ></p>
+
+          <p
+            id="gamePlayStatus"
+            class="muted center student-game-status"
+            role="status"
+          >
+            Choose your answer.
+          </p>
+
+        </div>
+
+        <!-- SCORE -->
+        <div class="card student-score-card">
+
+          <div>
+            <p class="small-text muted">YOUR SCORE</p>
+            <h2 id="studentScore">0</h2>
+          </div>
+
+          <div class="student-score-icon" aria-hidden="true">
+            ★
+          </div>
+
+        </div>
+
+      </section>
+
+      <!-- FINAL RESULTS -->
+      <section id="resultsSection" class="hidden">
+
+        <div class="card student-results-card center">
+
+          <div class="student-results-icon" aria-hidden="true">
+            🏆
+          </div>
+
+          <h2>Game Completed!</h2>
+
+          <p class="muted">
+            Well done for participating!
+          </p>
+
+          <div class="student-final-score">
+
+            <p>FINAL SCORE</p>
+
+            <h1 id="finalStudentScore">0</h1>
+
+            <p class="muted">POINTS</p>
+
+          </div>
+
+          <p class="muted small-text">STUDENT</p>
+
           <h2 id="finalStudentName"></h2>
 
-          <p class="muted small-text">Final Score</p>
-          <h1 id="finalStudentScore">0</h1>
-
           <p id="finalStudentRank" class="muted"></p>
+
         </div>
 
-        <h2>Leaderboard</h2>
-        <div id="studentLeaderboard"></div>
+        <!-- LEADERBOARD -->
+        <div class="card student-leaderboard-card">
+
+          <h2>🏅 Leaderboard</h2>
+
+          <p class="muted small-text">
+            Game results and player rankings
+          </p>
+
+          <div id="studentLeaderboard"></div>
+
+        </div>
+
       </section>
 
-      <p class="muted center">
-        <a href="index.html">Back to home</a>
-      </p>
+      <!-- FOOTER -->
+      <footer class="student-footer">
+        <a href="index.html">← Back to home</a>
+      </footer>
 
     </div>
   </main>
